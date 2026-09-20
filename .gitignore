@@ -1,0 +1,23 @@
+# Executables
+*.exe
+*.out
+*.app
+*.bin
+*.dll
+*.so
+*.dylib
+*.msi
+*.apk
+*.bat
+*.cmd
+*.com
+*.run
+
+# Common local executable names
+/fidelis
+/dist
+/build
+
+# OS generated files
+.DS_Store
+Thumbs.db
