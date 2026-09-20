@@ -1,10 +1,12 @@
 #include <stdio.h>
 #include "lexer.h"
 
-int main() {
-    FILE *file = fopen("samples/source_file.swift", "r");
+int main(int argc, char *argv[]) {
+    const char *filename = (argc > 1) ? argv[1] : "samples/test_features.swift";
+
+    FILE *file = fopen(filename, "r");
     if (!file) {
-        printf("Error opening file.\n");
+        printf("Error opening file: %s\n", filename);
         return 1;
     }
 

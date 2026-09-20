@@ -1,0 +1,3 @@
+// Test escape sequences
+string msg = "Hello\nWorld\tTab";
+char special = '\t';

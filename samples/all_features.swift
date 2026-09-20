@@ -1,6 +1,6 @@
-// ==========================================
-// THE TERMINAL FSM: SMART HOME DASHBOARD
-// ==========================================
+/* ==========================================
+ THE TERMINAL FSM: SMART HOME DASHBOARD
+ ========================================== */
 // Language Documentation: Behavior, Semantics, and Control Flow
 
 // 1. GLOBAL STATE
