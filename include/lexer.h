@@ -12,12 +12,12 @@ typedef enum {
     // Keywords & Reserved Words
     TOKEN_INT, TOKEN_STRING, TOKEN_STATE, TOKEN_ENSURE, TOKEN_TRANSITION,
     
-    // Operators[cite: 1]
+    // Operators
     TOKEN_PLUS, TOKEN_MINUS, TOKEN_ASSIGN, TOKEN_MINUS_ASSIGN,
     TOKEN_PIPELINE,  // |>
     TOKEN_ARROW,     // ->
     
-    // Delimiters[cite: 1]
+    // Delimiters
     TOKEN_SEMICOLON, TOKEN_LBRACE, TOKEN_RBRACE,
     
     TOKEN_EOF,
@@ -26,7 +26,7 @@ typedef enum {
 
 typedef struct {
     TokenType type;
-    char lexeme[33]; // 32 characters max + null terminator[cite: 1]
+    char lexeme[33]; // 32 characters max + null terminator
 } Token;
 
 Token getNextToken(FILE *source);

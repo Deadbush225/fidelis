@@ -16,20 +16,20 @@ typedef enum {
 TokenType lookupKeyword(const char* lexeme, bool* isNoiseWord) {
     *isNoiseWord = false;
     
-    // Noise words have no semantic value and are discarded[cite: 1]
+    // Noise words have no semantic value and are discarded
     if (strcmp(lexeme, "is") == 0 || strcmp(lexeme, "then") == 0 || 
         strcmp(lexeme, "do") == 0 || strcmp(lexeme, "to") == 0) {
         *isNoiseWord = true;
         return TOKEN_ERROR; 
     }
     
-    // Reserved Words[cite: 1]
+    // Reserved Words
     if (strcmp(lexeme, "int") == 0) return TOKEN_INT;
     if (strcmp(lexeme, "state") == 0) return TOKEN_STATE;
     if (strcmp(lexeme, "ensure") == 0) return TOKEN_ENSURE;
     if (strcmp(lexeme, "transition") == 0) return TOKEN_TRANSITION;
     
-    // If not a keyword or noise word, it is a valid identifier[cite: 1]
+    // If not a keyword or noise word, it is a valid identifier
     return TOKEN_IDENTIFIER;
 }
 
@@ -50,11 +50,11 @@ Token getNextToken(FILE *source) {
                     strcpy(token.lexeme, "EOF");
                     state = STATE_DONE;
                 } 
-                // Whitespace is treated purely as a separator and ignored[cite: 1]
+                // Whitespace is treated purely as a separator and ignored
                 else if (isspace(c)) {
                     continue; 
                 } 
-                // Identifiers must begin with a letter or underscore[cite: 1]
+                // Identifiers must begin with a letter or underscore
                 else if (isalpha(c) || c == '_') {
                     state = STATE_IN_IDENTIFIER;
                     token.lexeme[lexemeIdx++] = c;
@@ -80,9 +80,9 @@ Token getNextToken(FILE *source) {
                 break;
 
             case STATE_IN_IDENTIFIER:
-                // Subsequent characters can be alphanumeric or underscores[cite: 1]
+                // Subsequent characters can be alphanumeric or underscores
                 if (isalnum(c) || c == '_') {
-                    // Enforce the 32-character maximum length[cite: 1]
+                    // Enforce the 32-character maximum length
                     if (lexemeIdx < 32) {
                         token.lexeme[lexemeIdx++] = c;
                     }
@@ -93,7 +93,7 @@ Token getNextToken(FILE *source) {
                     bool isNoise;
                     token.type = lookupKeyword(token.lexeme, &isNoise);
                     
-                    // If a noise word is detected, skip it by recursively calling getNextToken[cite: 1]
+                    // If a noise word is detected, skip it by recursively calling getNextToken
                     if (isNoise) {
                         return getNextToken(source);
                     }
@@ -105,7 +105,7 @@ Token getNextToken(FILE *source) {
                 if (c == '>') {
                     token.lexeme[lexemeIdx++] = c;
                     token.lexeme[lexemeIdx] = '\0';
-                    token.type = TOKEN_PIPELINE; // Yields '|>'[cite: 1]
+                    token.type = TOKEN_PIPELINE; // Yields '|>'
                     state = STATE_DONE;
                 } else {
                     ungetc(c, source);
@@ -118,17 +118,17 @@ Token getNextToken(FILE *source) {
                 if (c == '>') {
                     token.lexeme[lexemeIdx++] = c;
                     token.lexeme[lexemeIdx] = '\0';
-                    token.type = TOKEN_ARROW; // Yields '->'[cite: 1]
+                    token.type = TOKEN_ARROW; // Yields '->'
                     state = STATE_DONE;
                 } else if (c == '=') {
                     token.lexeme[lexemeIdx++] = c;
                     token.lexeme[lexemeIdx] = '\0';
-                    token.type = TOKEN_MINUS_ASSIGN; // Yields '-='[cite: 1]
+                    token.type = TOKEN_MINUS_ASSIGN; // Yields '-='
                     state = STATE_DONE;
                 } else {
                     ungetc(c, source);
                     token.lexeme[lexemeIdx] = '\0';
-                    token.type = TOKEN_MINUS; // Yields '-'[cite: 1]
+                    token.type = TOKEN_MINUS; // Yields '-'
                     state = STATE_DONE;
                 }
                 break;
