@@ -59,25 +59,13 @@ This rule dictates that an identifier must:
 **Lexical Evaluation Example:**
 
 | Identifier | Parser Evaluation | Reason |
-| --- | --- | --- |
-| `studentAge` | Valid | Starts with a letter, containing only letters.
-
- |
-| `_score_1` | Valid | Starts with an underscore, followed by letters and digits.
-
- |
-| `MAX_VALUE` | Valid | Starts with a letter, contains only uppercase letters and underscores.
-
- |
-| `1stPlace` | Invalid | Violates the regex `^[a-zA-Z]` by starting with a digit.
-
- |
-| `user-name` | Invalid | Contains an illegal operator character (`-`).
-
- |
-| `total sum` | Invalid | Contains a space, which acts as a token separator.
-
- |
+| --- | --- | --- 
+| `studentAge` | Valid | Starts with a letter, containing only letters. |
+| `_score_1` | Valid | Starts with an underscore, followed by letters and digits. |
+| `MAX_VALUE` | Valid | Starts with a letter, contains only uppercase letters and underscores. |
+| `1stPlace` | Invalid | Violates the regex `^[a-zA-Z]` by starting with a digit. |
+| `user-name` | Invalid | Contains an illegal operator character (`-`). |
+| `total sum` | Invalid | Contains a space, which acts as a token separator. |
 
 ### Operation Symbols
 
@@ -97,101 +85,55 @@ Let:
 
 | Operator | Description |
 | --- | --- |
-| `+` | add
-
- |
-| `-` | subtract
-
- |
-| `*` | multiply
-
- |
-| `/` | divide
-
- |
-| `%` | modulo
-
- |
-| `\` | integer division
-
- |
-| `^` | exponent
-
- |
+| `+` | add |
+| `-` | subtract |
+| `*` | multiply |
+| `/` | divide |
+| `%` | modulo |
+| `\` | integer division |
+| `^` | exponent |
 
 **BOOLEAN - RELATIONAL**
 
 | Operator | Description |
 | --- | --- |
-| `==` | Value comparison evaluating to a boolean state (Equal to)
-
- |
-| `!=` | Value comparison evaluating to a boolean state (Not equal to)
-
- |
-| `<=` | Value comparison evaluating to a boolean state (Less than or equal to)
-
- |
-| `>=` | Value comparison evaluating to a boolean state (Greater than or equal to)
-
- |
-| `<` | Value comparison evaluating to a boolean state (Less than)
-
- |
-| `>` | Value comparison evaluating to a boolean state (Greater than)
-
- |
+| `==` | Value comparison evaluating to a boolean state (Equal to) |
+| `!=` | Value comparison evaluating to a boolean state (Not equal to) |
+| `<=` | Value comparison evaluating to a boolean state (Less than or equal to) |
+| `>=` | Value comparison evaluating to a boolean state (Greater than or equal to) |
+| `<` | Value comparison evaluating to a boolean state (Less than) |
+| `>` | Value comparison evaluating to a boolean state (Greater than) |
 
 **BOOLEAN - LOGICAL**
 
 | Operator | Description |
 | --- | --- |
-| `!` | Negates a boolean condition (NOT)
-
- |
-| `&&` | Combines boolean conditions (AND)
-
- |
-| || | Evaluates multiple boolean conditions (OR)
-
- |
+| `!` | Negates a boolean condition (NOT) |
+| `&&` | Combines boolean conditions (AND) |
+| `\|\|` | Evaluates multiple boolean conditions (OR) | 
 
 **ASSIGNMENT**
 
 | Operator | Description |
 | --- | --- |
-| `=` | Assigns the value of the right-hand expression to the left-hand variable.
-
- |
-| `+=` | Adds the right-hand value to the variable and reassigns the result.
-
- |
-| `-=` | Subtracts the right-hand value from the variable and reassigns the result.
-
- |
-| `*=` | Multiplies the variable by the right-hand value and reassigns the result.
-
- |
-| `/=` | Divides the variable by the right-hand value and reassigns the result.
-
- |
-| `%=` | Assigns the variable the remainder of dividing it by the right-hand value.
-
- |
+| `=` | Assigns the value of the right-hand expression to the left-hand variable. |
+| `+=` | Adds the right-hand value to the variable and reassigns the result. |
+| `-=` | Subtracts the right-hand value from the variable and reassigns the result. |
+| `*=` | Multiplies the variable by the right-hand value and reassigns the result. |
+| `/=` | Divides the variable by the right-hand value and reassigns the result. |
+| `%=` | Assigns the variable the remainder of dividing it by the right-hand value. |
 
 **PIPELINE**
 
 | Set Element | Description |
 | --- | --- |
-| ` | >` |
+| `\|>` | Passes the evaluated result of the left-hand expression directly as the first argument to the function on the right side. |
 
 **ARROW**
 
 | Set Element | Description |
 | --- | --- |
-| `->` | Acts as a directional mapper that links a function declaration to its explicit return type or routes a matched condition to its corresponding execution path.
-
- |
+| `->` | Acts as a directional mapper that links a function declaration to its explicit return type or routes a matched condition to its corresponding execution path. |
 
 ---
 
@@ -203,45 +145,19 @@ Keywords are action-oriented commands that instruct the compiler to perform a sp
 
 | Category | Keyword | Description |
 | --- | --- | --- |
-| **NULL SAFETY** | `ensure` | Acts as a strict safety gateway to unwrap optional variables, mandating a control flow exit on failure.
-
- |
-| **CONTROL FLOW** | `transition` | Routes the state machine by transferring execution to a newly specified state block.
-
- |
-|  | `match` | Handles exhaustive pattern evaluation, allowing execution to branch based on matching data values.
-
- |
-|  | `if` | Initiates standard logical branching by executing a block of code only if a provided condition evaluates to true.
-
- |
-|  | `else` | Provides an alternative execution path for logical branching when an if condition evaluates to false.
-
- |
-|  | `for` | Handles standard counting and iterative looping over a sequence or range of values.
-
- |
-| **INPUT/OUTPUT** | `print` | A built-in action used to push formatted text or variable values directly to the terminal output.
-
- |
-|  | `readLine` | Pauses program execution to capture standard string input from the user via the terminal.
-
- |
-|  | `readInt` | Pauses program execution to safely capture and parse integer input from the user via the terminal.
-
- |
-| **SYSTEM** | `quit` | An action command that instructs the compiled program to terminate its process entirely and exit.
-
- |
-|  | `sleep` | Pauses the execution thread for a predefined duration, measured in milliseconds.
-
- |
-| **MODULARITY** | `fn` | Used to declare reusable, pure helper functions that execute independently of the main state machine.
-
- |
-|  | `return` | Sends a computed value back to the caller's execution flow, terminating the current function block.
-
- |
+| **NULL SAFETY** | `ensure` | Acts as a strict safety gateway to unwrap optional variables, mandating a control flow exit on failure. |
+| **CONTROL FLOW** | `transition` | Routes the state machine by transferring execution to a newly specified state block. |
+| | `match` | Handles exhaustive pattern evaluation, allowing execution to branch based on matching data values. |
+| | `if` | Initiates standard logical branching by executing a block of code only if a provided condition evaluates to true. |
+| | `else` | Provides an alternative execution path for logical branching when an if condition evaluates to false. |
+| | `for` | Handles standard counting and iterative looping over a sequence or range of values. |
+| **INPUT/OUTPUT** | `print` | A built-in action used to push formatted text or variable values directly to the terminal output. |
+| | `readLine` | Pauses program execution to capture standard string input from the user via the terminal. |
+| | `readInt` | Pauses program execution to safely capture and parse integer input from the user via the terminal. |
+| **SYSTEM** | `quit` | An action command that instructs the compiled program to terminate its process entirely and exit. |
+| | `sleep` | Pauses the execution thread for a predefined duration, measured in milliseconds. |
+| **MODULARITY** | `fn` | Used to declare reusable, pure helper functions that execute independently of the main state machine. |
+|  | `return` | Sends a computed value back to the caller's execution flow, terminating the current function block. |
 
 ### Reserved Words
 
@@ -249,39 +165,17 @@ Reserved Words hold special architectural or structural meaning within the langu
 
 | Category | Reserved Word | Description |
 | --- | --- | --- |
-| **DATA TYPES** | `int` | Defines the specific primitive type for a variable intended to store whole numbers. Abstract or user-defined data types are not supported.
-
- |
-|  | `string` | Defines the specific primitive type for a variable intended to store a sequence of text characters.
-
- |
-|  | `bool` | Defines the specific primitive type for a variable intended to store true or false logical states.
-
- |
-|  | `float` | Defines the specific primitive type for a variable intended to store numerical values with fractional or decimal components.
-
- |
-|  | `char` | Defines the specific primitive type for a variable intended to store a single alphanumeric character or symbol.
-
- |
-| **STRUCTURAL** | `state` | Defines the architectural boundaries of the program by encapsulating a discrete machine mode and its associated logic.
-
- |
-|  | `react` | Defines a data-driven watcher that triggers automatically when a bound piece of state or data changes.
-
- |
-|  | `loop` | Defines an infinite, blocking execution context, typically used for main game or event-listening loops.
-
- |
-| **STATE LITERALS** | `true` | The definitive positive state value for boolean variables and logical evaluations.
-
- |
-|  | `false` | The definitive negative state value for boolean variables and logical evaluations.
-
- |
-|  | `null` | The explicit empty representation used for optional primitive types (e.g., Int?), indicating the deliberate absence of a value.
-
- |
+| **DATA TYPES** | `int` | Defines the specific primitive type for a variable intended to store whole numbers. Abstract or user-defined data types are not supported. |
+|  | `string` | Defines the specific primitive type for a variable intended to store a sequence of text characters. |
+|  | `bool` | Defines the specific primitive type for a variable intended to store true or false logical states. |
+|  | `float` | Defines the specific primitive type for a variable intended to store numerical values with fractional or decimal components. |
+|  | `char` | Defines the specific primitive type for a variable intended to store a single alphanumeric character or symbol. |
+| **STRUCTURAL** | `state` | Defines the architectural boundaries of the program by encapsulating a discrete machine mode and its associated logic. |
+|  | `react` | Defines a data-driven watcher that triggers automatically when a bound piece of state or data changes. |
+|  | `loop` | Defines an infinite, blocking execution context, typically used for main game or event-listening loops. |
+| **STATE LITERALS** | `true` | The definitive positive state value for boolean variables and logical evaluations. |
+|  | `false` | The definitive negative state value for boolean variables and logical evaluations. |
+|  | `null` | The explicit empty representation used for optional primitive types (e.g., Int?), indicating the deliberate absence of a value. |
 
 ---
 
@@ -346,29 +240,17 @@ Blanks, spaces, tabs (`\t`), and newlines (`\n`) are treated purely as token sep
 
 | Symbol | Name | Function / Usage |
 | --- | --- | --- |
-| `;` | Semicolon (terminator) | Acts as an optional hard terminator used to separate and conclude individual statements.
-
- |
-| `,` | Comma (separator) | Acts as a soft separator used to separate parameters and arguments.
-
- |
-| `:` | Colon (type annotator) | Acts as a type annotator used to separate an identifier from its declared type.
-
- |
+| `;` | Semicolon (terminator) | Acts as an optional hard terminator used to separate and conclude individual statements. |
+| `,` | Comma (separator) | Acts as a soft separator used to separate parameters and arguments. |
+| `:` | Colon (type annotator) | Acts as a type annotator used to separate an identifier from its declared type. |
 
 **Brackets**
 
 | Symbol | Name | Function / Usage |
 | --- | --- | --- |
-| `()` | Parentheses | Used for mathematical expression groupings and enclosing function arguments.
-
- |
-| `{}` | Curly Braces | Groups multiple statements together to define scope blocks for functions, loops, and conditional statements.
-
- |
-| `[]` | Square Brackets | Used for array indexing and list declaration.
-
- |
+| `()` | Parentheses | Used for mathematical expression groupings and enclosing function arguments. |
+| `{}` | Curly Braces | Groups multiple statements together to define scope blocks for functions, loops, and conditional statements. |
+| `[]` | Square Brackets | Used for array indexing and list declaration. |
 
 ### Pushdown Automaton of the Delimiters
 
@@ -452,34 +334,16 @@ Operations are evaluated from highest precedence (Level 1) to lowest (Level 10).
 
 | Precedence Level | Operator Type | Symbols | Associativity |
 | --- | --- | --- | --- |
-| **1 (Highest)** | Parentheses (Grouping) | `()` | Left-to-Right
-
- |
-| **2** | Exponent | `^` | Right-to-Left
-
- |
-| **3** | Logical NOT | `!` | Right-to-Left
-
- |
-| **4** | Multiplicative | `*`, `/`, `\`, `%` | Left-to-Right
-
- |
-| **5** | Additive | `+`, `-` | Left-to-Right
-
- |
-| **6** | Relational | `<`, `>`, `<=`, `>=` | Left-to-Right
-
- |
-| **7** | Equality | `==`, `!=` | Left-to-Right
-
- |
-| **8** | Logical AND | `&&` | Left-to-Right
-
- |
-| **9** | Logical OR | || | Left-to-Right
-
- |
-| **10 (Lowest)** | Pipeline Operator | ` | >` |
+| **1 (Highest)** | Parentheses (Grouping) | `()` | Left-to-Right |
+| **2** | Exponent | `^` | Right-to-Left |
+| **3** | Logical NOT | `!` | Right-to-Left |
+| **4** | Multiplicative | `*`, `/`, `\`, `%` | Left-to-Right |
+| **5** | Additive | `+`, `-` | Left-to-Right |
+| **6** | Relational | `<`, `>`, `<=`, `>=` | Left-to-Right |
+| **7** | Equality | `==`, `!=` | Left-to-Right |
+| **8** | Logical AND | `&&` | Left-to-Right |
+| **9** | Logical OR | `\|\|` | Left-to-Right |
+| **10 (Lowest)** | Pipeline Operator | `\|>` | Left-to-Right |
 
 ---
 
@@ -491,18 +355,10 @@ Operations are evaluated from highest precedence (Level 1) to lowest (Level 10).
 
 | Data Type | Keyword | Description | Declaration Example |
 | --- | --- | --- | --- |
-| **Integer** | `int` | Stores whole numbers without decimals. Typically used for indexing, counting, and discrete math.
-
- | `int roomTemp = 22;`<br> |
-| **Floating-Point** | `float` | Stores numbers with fractional (decimal) parts. Replaces "Decimal" to align with standard industry syntax.
-
- | `float weight = 150.5`<br> |
-| **Character** | `char` | Stores a single alphanumeric character or symbol, enclosed in single quotes.
-
- | `char grade = 'A'`<br> |
-| **Boolean** | `bool` | Stores a true or false value. Used exclusively for logical operations and conditional control flow.
-
- | `bool is_valid = true`<br> |
+| **Integer** | `int` | Stores whole numbers without decimals. Typically used for indexing, counting, and discrete math. | `int roomTemp = 22;`<br> |
+| **Floating-Point** | `float` | Stores numbers with fractional (decimal) parts. Replaces "Decimal" to align with standard industry syntax. | `float weight = 150.5`<br> |
+| **Character** | `char` | Stores a single alphanumeric character or symbol, enclosed in single quotes. | `char grade = 'A'`<br> |
+| **Boolean** | `bool` | Stores a true or false value. Used exclusively for logical operations and conditional control flow. | `bool is_valid = true`<br> |
 
 ### 2. Abstract & Composite Data Types
 
@@ -510,12 +366,8 @@ Operations are evaluated from highest precedence (Level 1) to lowest (Level 10).
 
 | Data Type | Keyword | Description | Declaration Example |
 | --- | --- | --- | --- |
-| **String** | `string` | An ADT representing a sequence of text characters. Used heavily for I/O and terminal parsing.
-
- | `string? tempInput = readLine()`<br> |
-| **Array** | `[]` | An ordered collection of elements sharing the same data type. Enclosed in brackets.
-
- | `[int] scores = [90, 85, 88]`<br> |
+| **String** | `string` | An ADT representing a sequence of text characters. Used heavily for I/O and terminal parsing. | `string? tempInput = readLine()`<br> |
+| **Array** | `[]` | An ordered collection of elements sharing the same data type. Enclosed in brackets. | `[int] scores = [90, 85, 88]`<br> |
 
 ---
 
