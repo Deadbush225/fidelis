@@ -35,3 +35,13 @@ int value is = 5;
 ensure int x then { print("Valid"); }
 state Boot do { print("Booting"); }
 transition to Dashboard;
+
+// Invalid lexical examples: these unsupported characters should produce TOKEN_ERROR.
+@
+#
+~
+
+// Invalid identifiers from the lexical evaluation example.
+1stPlace
+user-name
+total sum

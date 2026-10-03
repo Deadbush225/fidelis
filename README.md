@@ -15,6 +15,8 @@ The lexer is organized into three primary concerns:
   - `test_features.swift` — Default input for the lexer demo
   - `all_features.swift` — Comprehensive feature showcase
   - `escape_test.swift` — Escape-sequence focused sample
+- **`docs/lexer-design.md`** — DFA structure, tokenization behavior, and
+  implementation limitations
 
 ## Requirements
 
@@ -127,7 +129,8 @@ These are recognized and filtered by the lexer; they do not appear in the token 
    terminated only by the closing */
 ```
 
-Comments are automatically discarded during tokenization.
+Comments are returned as `LINE_COMMENT` and `BLOCK_COMMENT` tokens; the caller
+decides whether to display or ignore them.
 
 ## Output Format
 
@@ -160,6 +163,9 @@ Three core macros keep the DFA implementation modular and maintainable:
 - `BRANCH_OR_IDENTIFIER()` — Continue down a keyword path or fall back to identifier
 - `YIELD_KEYWORD_OR_IDENTIFIER()` — Emit a keyword token or fall back to identifier if more letters follow
 - `DISCARD_NOISE_OR_IDENTIFIER()` — Recursively discard noise words or treat as identifier
+
+For the state flow, token interface, and current implementation limitations,
+see [Lexer Design](docs/lexer-design.md).
 
 ## Samples
 
