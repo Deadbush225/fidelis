@@ -402,6 +402,17 @@ Token getNextToken(FILE *source) {
                 } else if (c == '.') {
                     state = STATE_IN_FLOAT;
                     token.lexeme[lexemeIdx++] = c;
+                } else if (isalpha(c) || c == '_') {
+                    token.lexeme[lexemeIdx++] = c;
+                    while ((c = fgetc(source)) != EOF && (isalnum(c) || c == '_')) {
+                        if (lexemeIdx < (int)sizeof(token.lexeme) - 1) {
+                            token.lexeme[lexemeIdx++] = c;
+                        }
+                    }
+                    if (c != EOF) ungetc(c, source);
+                    token.lexeme[lexemeIdx] = '\0';
+                    token.type = TOKEN_ERROR;
+                    state = STATE_DONE;
                 } else {
                     ungetc(c, source);
                     token.lexeme[lexemeIdx] = '\0';
@@ -413,6 +424,17 @@ Token getNextToken(FILE *source) {
             case STATE_IN_FLOAT:
                 if (isdigit(c)) {
                     token.lexeme[lexemeIdx++] = c;
+                } else if (isalpha(c) || c == '_') {
+                    token.lexeme[lexemeIdx++] = c;
+                    while ((c = fgetc(source)) != EOF && (isalnum(c) || c == '_')) {
+                        if (lexemeIdx < (int)sizeof(token.lexeme) - 1) {
+                            token.lexeme[lexemeIdx++] = c;
+                        }
+                    }
+                    if (c != EOF) ungetc(c, source);
+                    token.lexeme[lexemeIdx] = '\0';
+                    token.type = TOKEN_ERROR;
+                    state = STATE_DONE;
                 } else {
                     ungetc(c, source);
                     token.lexeme[lexemeIdx] = '\0';
