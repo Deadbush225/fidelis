@@ -840,7 +840,7 @@ Token getNextToken(FILE *source) {
                 } else {
                     ungetc(c, source);
                     token.lexeme[lexemeIdx] = '\0';
-                    token.type = TOKEN_IDENTIFIER;
+                    token.type = (lexemeIdx > 32) ? TOKEN_ERROR : TOKEN_IDENTIFIER;
                     state = STATE_DONE;
                 }
                 break;
@@ -849,6 +849,11 @@ Token getNextToken(FILE *source) {
                 break;
         }
     }
+
+    if (token.type == TOKEN_IDENTIFIER && strlen(token.lexeme) > 32) {
+        token.type = TOKEN_ERROR;
+    }
+
     return token;
 }
 
