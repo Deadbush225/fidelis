@@ -78,8 +78,9 @@ Let:
 * $LOGICAL = \{!, \&\&, \vert{}\vert{}\}$
 * $ASSIGNMENT = \{=, +=, -=, *=, /=, \%=\}$
 * $PIPELINE = \{\vert{}>\}$
+* $OPTIONAL = \{?\}
 * $ARROW = \{->\}$
-* $Op = ARITHMETIC \cup RELATIONAL \cup LOGICAL \cup ASSIGNMENT \cup PIPELINE \cup ARROW$
+* $Op = ARITHMETIC \cup RELATIONAL \cup LOGICAL \cup ASSIGNMENT \cup PIPELINE \cup ARROW \cup OPTIONAL$
 
 **ARITHMETIC - Standard mathematical operations**
 
@@ -134,6 +135,12 @@ Let:
 | Set Element | Description |
 | --- | --- |
 | `->` | Acts as a directional mapper that links a function declaration to its explicit return type or routes a matched condition to its corresponding execution path. |
+
+**OPTIONAL MARKER**
+
+| Set Element | Description |
+| --- | --- |
+| `?` | Suffixes a data type to make it optional, allowing the type to hold `null` in addition to its ordinary values (e.g., `int?`, `string?`). |
 
 ---
 
@@ -227,6 +234,21 @@ a multi-line
 comment */
 
 ```
+
+## String and Character Literals
+
+* **String literals:** A sequence of characters enclosed in double quotes (`"`). Whitespace inside the quotes is preserved.
+* **Character literals:** Exactly one character enclosed in single quotes (`'`).
+
+Both literal forms support a backslash escape, which keeps the following character inside the literal. This allows a quote character to appear within a literal of the same kind:
+
+```c
+string greeting = "She said \"hello\"."
+char quote = '\''
+char newline = '\n'
+```
+
+The escape sequence is preserved as written in the token; it is not decoded during tokenization. A string literal that reaches the end of a line or the end of the file before its closing quote is a lexical error. A character literal containing zero characters or more than one character is also a lexical error.
 
 ## Blanks (spaces)
 
