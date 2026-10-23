@@ -61,8 +61,8 @@ make clean
 ### Literals
 - **Integer**: `42`, `1234`
 - **Float**: `98.6`, `3.14`, `100.0`
-- **String**: `"hello world"` (preserves whitespace)
-- **Character**: `'A'`, `'x'`, `'!'`
+- **String**: `"hello world"` (preserves whitespace; `\"` stays inside the literal)
+- **Character**: `'A'`, `'x'`, `'!'`, `'\n'` (exactly one character or escape)
 - **Boolean**: `true`, `false`
 
 ### Keywords
@@ -110,6 +110,7 @@ These are recognized and filtered by the lexer; they do not appear in the token 
 #### Special
 - `|>` `PIPELINE` (data flow operator)
 - `->` `ARROW` (function return type / match routing)
+- `?` `QUESTION` (optional-type suffix, as in `int?` and `string?`)
 
 ### Delimiters & Brackets
 - Delimiters: `;` `SEMICOLON`, `,` `COMMA`, `:` `COLON`
@@ -154,7 +155,7 @@ The lexer uses a Deterministic Finite Automaton that processes the input charact
 - **State branching** for multi-character sequences (e.g., `==`, `->`, `|>`, `&&`, `||`, keyword prefixes)
 - **Keyword trie-like paths** where each branch represents a character in a keyword
 - **Operator lookahead** to distinguish single-character operators from their multi-character variants
-- **Recursive handling** for comment and noise-word discarding
+- **Iterative noise-word discarding** that restarts the scan loop, so long noise-word runs use constant stack
 
 ### Macro System
 
@@ -162,7 +163,7 @@ Three core macros keep the DFA implementation modular and maintainable:
 
 - `BRANCH_OR_IDENTIFIER()` — Continue down a keyword path or fall back to identifier
 - `YIELD_KEYWORD_OR_IDENTIFIER()` — Emit a keyword token or fall back to identifier if more letters follow
-- `DISCARD_NOISE_OR_IDENTIFIER()` — Recursively discard noise words or treat as identifier
+- `DISCARD_NOISE_OR_IDENTIFIER()` — Discard noise words by restarting the scan loop, or treat as identifier
 
 For the state flow, token interface, and current implementation limitations,
 see [Lexer Design](docs/lexer-design.md).
@@ -185,7 +186,7 @@ This exercises comments, floats, strings, characters, all keywords, operators, a
 
 ## Notes
 
-- The lexer stores lexemes up to 256 characters (sufficient for string literals and multi-line comments)
+- The lexer stores lexemes up to 255 characters; longer input is truncated rather than overflowing
 - Unrecognized characters produce `TOKEN_ERROR` tokens
 - Unterminated strings or block comments produce error tokens with a descriptive message
 - All whitespace (spaces, tabs, newlines) is treated as token separators and ignored
