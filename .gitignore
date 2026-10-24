@@ -17,6 +17,7 @@
 /fidelis
 /dist
 /build
+/outputs
 
 # Environment files
 .vscode/
