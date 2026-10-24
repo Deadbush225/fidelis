@@ -124,12 +124,18 @@ Examples include:
 | --- | --- |
 | `+`, `+=` | `TOKEN_PLUS`, `TOKEN_PLUS_ASSIGN` |
 | `-`, `-=`, `->` | `TOKEN_MINUS`, `TOKEN_MINUS_ASSIGN`, `TOKEN_ARROW` |
+| `*`, `*=` | `TOKEN_STAR`, `TOKEN_STAR_ASSIGN` |
+| `%`, `%=` | `TOKEN_PERCENT`, `TOKEN_PERCENT_ASSIGN` |
 | `=`, `==` | `TOKEN_ASSIGN`, `TOKEN_EQ` |
 | `!`, `!=` | `TOKEN_NOT`, `TOKEN_NE` |
 | `<`, `<=`; `>`, `>=` | Relational token pairs |
 | `&&`; `||`; `|>` | `TOKEN_AND`; `TOKEN_OR`; `TOKEN_PIPELINE` |
+| `^` | `TOKEN_CARET` |
+| `\` | `TOKEN_BACKSLASH` |
 | `?` | `TOKEN_QUESTION` (optional-type suffix) |
 
+The lexer also recognizes `/=` as `TOKEN_SLASH_ASSIGN` and accepts `\` and `^`
+as standalone operators in addition to the punctuation and bracket tokens above.
 A single `&` or a `|` not followed by `|` or `>` is an error token. Characters
 that are not part of a recognized token, such as `@`, also produce
 `TOKEN_ERROR`.
