@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include "lexer.h"
+#include "helper.h"
 
 #ifdef _WIN32
     #include <direct.h> // Windows specific header for mkdir
@@ -33,9 +34,12 @@ int main(int argc, char *argv[]) {
     Token t;
     do {
         t = getNextToken(file);
-        if (t.type != TOKEN_EOF) {
-            printToken(t, output);
-        }
+        // if (t.type != TOKEN_EOF) {
+        const char *tokenType = getTokenTypeName(t.type);
+        const char *lexeme = escapedLexeme(t.lexeme);
+          
+        fprintf(output, "%-20s | %s\n" , tokenType, lexeme);
+        // }
     } while (t.type != TOKEN_EOF);
 
     fclose(file);

@@ -1,8 +1,8 @@
 CC = gcc
 CFLAGS = -std=c11 -Wall -Wextra -pedantic -O2 -Iinclude
 TARGET = fidelis
-SOURCES = src/main.c src/lexer.c
-HEADERS = include/lexer.h
+SOURCES = src/main.c src/lexer.c src/helper.c
+HEADERS = include/lexer.h include/helper.h
 
 .PHONY: all clean run
 
