@@ -10,30 +10,42 @@ Parameters
     const char* lexeme - A pointer to the lexeme.
 */
 char* escapedLexeme(const char* lexeme) {
-    char* escaped = calloc(1, 1024);
-    char current;
+    enum { ESCAPED_CAPACITY = 1024 };
+    char* escaped = calloc(ESCAPED_CAPACITY, sizeof(*escaped));
+    size_t outputIndex = 0;
 
-    for (int i = 0; lexeme[i] != '\0'; i++) {
-        current = lexeme[i];
-        switch (current) {
+    if (escaped == NULL) {
+        return NULL;
+    }
+
+    for (size_t inputIndex = 0; lexeme[inputIndex] != '\0'; inputIndex++) {
+        const char* replacement = NULL;
+
+        switch (lexeme[inputIndex]) {
             case '\n':
-                strcat(escaped, "\\n");
+                replacement = "\\n";
                 break;
             case '\t':
-                strcat(escaped, "\\t");
+                replacement = "\\t";
                 break;
             case '\r':
-                strcat(escaped, "\\r");
-                break;
-            case '\0':
-                strcat(escaped, "\\0");
+                replacement = "\\r";
                 break;
             case '\\':
-                strcat(escaped, "\\\\");
+                replacement = "\\\\";
                 break;
             default:
-                strcat(escaped, &current);
+                if (outputIndex < ESCAPED_CAPACITY - 1) {
+                    escaped[outputIndex++] = lexeme[inputIndex];
+                }
+                continue;
+        }
+
+        while (*replacement != '\0' && outputIndex < ESCAPED_CAPACITY - 1) {
+            escaped[outputIndex++] = *replacement++;
         }
     }
+
+    escaped[outputIndex] = '\0';
     return escaped;
 }

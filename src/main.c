@@ -37,9 +37,17 @@ int main(int argc, char *argv[]) {
         t = getNextToken(file);
         // if (t.type != TOKEN_EOF) {
         const char *tokenType = getTokenTypeName(t.type);
-        const char *lexeme = escapedLexeme(t.lexeme);
+        char *lexeme = escapedLexeme(t.lexeme);
           
+        if (lexeme == NULL) {
+            fprintf(stderr, "Error allocating escaped lexeme\n");
+            fclose(file);
+            fclose(output);
+            return 1;
+        }
+
         fprintf(output, "%-20s | %s\n" , tokenType, lexeme);
+        free(lexeme);
         // }
     } while (t.type != TOKEN_EOF);
 
