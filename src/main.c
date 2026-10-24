@@ -13,6 +13,7 @@
 int main(int argc, char *argv[]) {
     const char *filename = (argc > 1) ? argv[1] : "samples/test_features.swift";
     const char *outputName = (argc > 2) ? argv[2] : "outputs/symbol_table.txt";
+    
     FILE *file = fopen(filename, "r");
     if (!file) {
         printf("Error opening file: %s\n", filename);
@@ -29,7 +30,7 @@ int main(int argc, char *argv[]) {
     }
 
     fprintf(output, "     TOKEN TYPE      |        LEXEME       \n");
-    fprintf(output, "---------------------|---------------------\n");
+    fprintf(output, "━━━━━━━━━━━━━━━━━━━━━|━━━━━━━━━━━━━━━━━━━━━\n");
 
     Token t;
     do {
