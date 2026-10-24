@@ -993,7 +993,7 @@ const char* getTokenTypeName(TokenType type) {
         case TOKEN_LINE_COMMENT:    return "LINE_COMMENT";
         case TOKEN_BLOCK_COMMENT:   return "BLOCK_COMMENT";
         case TOKEN_EOF:             return "EOF";
-        case TOKEN_ERROR:           return "ERROR";
+        case TOKEN_ERROR:           return "TOKEN_ERROR";
         default:                    return "UNKNOWN";
     }
 }
