@@ -1,6 +1,14 @@
 #include <stdio.h>
 #include "lexer.h"
 
+#ifdef _WIN32
+    #include <direct.h> // Windows specific header for mkdir
+    #define MKDIR(dir) _mkdir(dir)
+#else
+    #include <sys/stat.h> // Unix based system header for mkdir
+    #define MKDIR(dir) mkdir(dir, 0755)
+#endif
+
 int main(int argc, char *argv[]) {
     const char *filename = (argc > 1) ? argv[1] : "samples/test_features.swift";
     const char *outputName = (argc > 2) ? argv[2] : "outputs/symbol_table.txt";
@@ -9,17 +17,20 @@ int main(int argc, char *argv[]) {
         printf("Error opening file: %s\n", filename);
         return 1;
     }
-    FILE *output = fopen(outputName, "w");
+
+    MKDIR("outputs");
+
+    FILE *output = fopen(outputName, "w+");
     if (!output) {
         printf("Error opening output file: %s\n", outputName);
         fclose(file);
         return 1;
     }
 
-    fprintf(output, "     Token Type      |    Lexeme\n");
-    
+    fprintf(output, "     TOKEN TYPE      |        LEXEME       \n");
+    fprintf(output, "---------------------|---------------------\n");
+
     Token t;
-    fprintf(output,"        TOKEN TYPE            |            LEXEME\n");
     do {
         t = getNextToken(file);
         if (t.type != TOKEN_EOF) {
