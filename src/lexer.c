@@ -1031,7 +1031,7 @@ void printToken(Token t, FILE *fp) {
     const char *tokenType = getTokenTypeName(t.type);
     printf("Token Type: %-20s | Lexeme: ", tokenType);
     if (fp){
-        fprintf(fp, "Token Type: %-20s | Lexeme: " , tokenType);
+        fprintf(fp, "%-20s\t\t\t|\t\t" , tokenType);
     }
     printEscapedLexeme(t.lexeme, fp);
     printf("\n");

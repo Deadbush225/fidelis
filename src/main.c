@@ -17,6 +17,7 @@ int main(int argc, char *argv[]) {
     }
 
     Token t;
+    fprintf(output,"\t\tTOKEN TYPE\t\t\t\t|\t\t\t\tLEXEME\n");
     do {
         t = getNextToken(file);
         if (t.type != TOKEN_EOF) {
