@@ -10,39 +10,55 @@ Parameters
     const char* lexeme - A pointer to the lexeme.
 */
 char* escapedLexeme(const char* lexeme) {
-    enum { ESCAPED_CAPACITY = 1024 };
-    char* escaped = calloc(ESCAPED_CAPACITY, sizeof(*escaped));
-    size_t outputIndex = 0;
+    if (lexeme == NULL) {
+        return NULL;
+    }
 
+    size_t inputLength = strlen(lexeme);
+    size_t escapedLength = 1;
+
+    for (size_t i = 0; i < inputLength; i++) {
+        switch (lexeme[i]) {
+            case '\n':
+            case '\t':
+            case '\r':
+            case '\\':
+                escapedLength += 2;
+                break;
+            default:
+                escapedLength += 1;
+                break;
+        }
+    }
+
+    char* escaped = malloc(escapedLength);
     if (escaped == NULL) {
         return NULL;
     }
 
-    for (size_t inputIndex = 0; lexeme[inputIndex] != '\0'; inputIndex++) {
-        const char* replacement = NULL;
+    size_t outputIndex = 0;
 
-        switch (lexeme[inputIndex]) {
+    for (size_t i = 0; i < inputLength; i++) {
+        switch (lexeme[i]) {
             case '\n':
-                replacement = "\\n";
+                escaped[outputIndex++] = '\\';
+                escaped[outputIndex++] = 'n';
                 break;
             case '\t':
-                replacement = "\\t";
+                escaped[outputIndex++] = '\\';
+                escaped[outputIndex++] = 't';
                 break;
             case '\r':
-                replacement = "\\r";
+                escaped[outputIndex++] = '\\';
+                escaped[outputIndex++] = 'r';
                 break;
             case '\\':
-                replacement = "\\\\";
+                escaped[outputIndex++] = '\\';
+                escaped[outputIndex++] = '\\';
                 break;
             default:
-                if (outputIndex < ESCAPED_CAPACITY - 1) {
-                    escaped[outputIndex++] = lexeme[inputIndex];
-                }
-                continue;
-        }
-
-        while (*replacement != '\0' && outputIndex < ESCAPED_CAPACITY - 1) {
-            escaped[outputIndex++] = *replacement++;
+                escaped[outputIndex++] = lexeme[i];
+                break;
         }
     }
 
