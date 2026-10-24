@@ -16,6 +16,8 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
+    fprintf(output, "     Token Type      |    Lexeme\n");
+    
     Token t;
     fprintf(output,"        TOKEN TYPE            |            LEXEME\n");
     do {
