@@ -997,21 +997,45 @@ const char* getTokenTypeName(TokenType type) {
     }
 }
 
-void printEscapedLexeme(const char* lexeme) {
+/*
+printEscapedLexeme - Handles how the lexeme will be printed. If the loop encounters a special character, it will print the corresponding
+                     special character (e.g \n is formatted as "\\n")
+    Update (Psalm) - Added FILE *fp parameter to mirror outputs to a file.
+
+Parameters
+    const char* lexeme - A pointer to the lexeme.
+    FILE *fp - A File pointer for file output operations.
+*/
+void printEscapedLexeme(const char* lexeme, FILE *fp) {
     for (int i = 0; lexeme[i] != '\0'; i++) {
         switch (lexeme[i]) {
-            case '\n': printf("\\n"); break;
-            case '\t': printf("\\t"); break;
-            case '\r': printf("\\r"); break;
-            case '\0': printf("\\0"); break;
-            case '\\': printf("\\\\"); break;
-            default: putchar(lexeme[i]); break;
+            case '\n': printf("\\n"); if(fp) fprintf(fp,"\\n"); break;
+            case '\t': printf("\\t"); if(fp) fprintf(fp,"\\t");break;
+            case '\r': printf("\\r"); if(fp) fprintf(fp,"\\r");break;
+            case '\0': printf("\\0"); if(fp) fprintf(fp,"\\0");break;
+            case '\\': printf("\\\\"); if(fp) fprintf(fp,"\\\\");break;
+            default: putchar(lexeme[i]); if(fp) fprintf(fp, "%c", lexeme[i]); break;
         }
     }
 }
 
-void printToken(Token t) {
-    printf("Token Type: %-20s | Lexeme: ", getTokenTypeName(t.type));
-    printEscapedLexeme(t.lexeme);
+/*
+printToken - prints the Token Type and the Lexeme itself to the terminal, token by token.
+    Update (Psalm) - In conjunction, it also prints the token and the lexeme to a .txt file.
+
+Parameters:
+    Token t- The token currently being processed.
+    FILE *fp - A file pointer that points to the output file.
+*/
+void printToken(Token t, FILE *fp) {   
+    const char *tokenType = getTokenTypeName(t.type);
+    printf("Token Type: %-20s | Lexeme: ", tokenType);
+    if (fp){
+        fprintf(fp, "Token Type: %-20s | Lexeme: " , tokenType);
+    }
+    printEscapedLexeme(t.lexeme, fp);
     printf("\n");
+    if(fp){
+        fprintf(fp, "\n");
+    }
 }
