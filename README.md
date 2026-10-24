@@ -41,13 +41,13 @@ compile.cmd
 
 #### Windows (PowerShell)
 ```powershell
-gcc -std=c11 -Wall -Wextra -pedantic -O2 -Iinclude src\main.c src\lexer.c src\helper.c -o fidelis.exe
+gcc -Iinclude src\main.c src\lexer.c src\helper.c -o fidelis.exe
 .\fidelis.exe
 ```
 
 #### macOS / Linux
 ```bash
-gcc -std=c11 -Wall -Wextra -pedantic -O2 -Iinclude src/main.c src/lexer.c src/helper.c -o fidelis
+gcc -Iinclude src/main.c src/lexer.c src/helper.c -o fidelis
 ./fidelis
 ```
 
@@ -59,7 +59,7 @@ gcc -std=c11 -Wall -Wextra -pedantic -O2 -Iinclude src/main.c src/lexer.c src/he
 2. Compile:
 
 ```powershell
-gcc -std=c11 -Wall -Wextra -pedantic -O2 -Iinclude src\main.c src\lexer.c src\helper.c -o fidelis.exe
+gcc -Iinclude src\main.c src\lexer.c src\helper.c -o fidelis.exe
 ```
 
 3. Run the default sample:
@@ -86,7 +86,7 @@ compile.cmd
 2. Compile:
 
 ```bash
-gcc -std=c11 -Wall -Wextra -pedantic -O2 -Iinclude src/main.c src/lexer.c src/helper.c -o fidelis
+gcc -Iinclude src/main.c src/lexer.c src/helper.c -o fidelis
 ```
 
 3. Run the default sample:
@@ -114,7 +114,7 @@ chmod +x compile.sh
 2. Compile:
 
 ```bash
-gcc -std=c11 -Wall -Wextra -pedantic -O2 -Iinclude src/main.c src/lexer.c src/helper.c -o fidelis
+gcc -Iinclude src/main.c src/lexer.c src/helper.c -o fidelis
 ```
 
 3. Run the default sample:

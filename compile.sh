@@ -7,11 +7,6 @@ OUT="$ROOT_DIR/fidelis"
 printf 'Compiling Fidelis...\n'
 
 gcc \
-  -std=c11 \
-  -Wall \
-  -Wextra \
-  -pedantic \
-  -O2 \
   -I"$ROOT_DIR/include" \
   "$ROOT_DIR/src/main.c" \
   "$ROOT_DIR/src/lexer.c" \
