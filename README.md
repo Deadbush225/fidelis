@@ -1,27 +1,146 @@
 # Fidelis Lexer
 
-A complete C lexer implementing the full Fidelis programming language specification. The lexer uses a pure Deterministic Finite Automaton (DFA) architecture with character-by-character evaluation to recognize and tokenize the entire Fidelis syntax.
+A complete C lexer implementing the full Fidelis programming language specification. The lexer uses a pure DFA-based design to scan source text and emit tokens for keywords, literals, operators, and comments.
 
 ## Architecture
 
-The lexer is organized into three primary concerns:
+- `src/` — lexer implementation
+  - `main.c` — entry point that reads source files and prints tokens
+  - `lexer.c` — DFA tokenization engine
+- `include/` — public interfaces
+  - `lexer.h` — token types, token structure, and declarations
+- `samples/` — example inputs
+  - `test_features.swift` — default demo source
+  - `all_features.swift` — comprehensive feature showcase
+  - `escape_test.swift` — escape-sequence examples
+- `docs/lexer-design.md` — lexer state and design notes
 
-- **`src/`** — Lexer implementation
-  - `main.c` — Entry point that reads source files and prints tokens
-  - `lexer.c` — Complete DFA-based tokenization engine
-- **`include/`** — Public interfaces
-  - `lexer.h` — Token types, Token struct, and function declarations
-- **`samples/`** — Test input files
-  - `test_features.swift` — Default input for the lexer demo
-  - `all_features.swift` — Comprehensive feature showcase
-  - `escape_test.swift` — Escape-sequence focused sample
-- **`docs/lexer-design.md`** — DFA structure, tokenization behavior, and
-  implementation limitations
+## Quick Start
+
+### Option 1: Use `make`
+
+```bash
+make
+./fidelis
+```
+
+### Option 2: Unix shell script
+
+```bash
+chmod +x compile.sh
+./compile.sh
+```
+
+### Option 3: Windows batch script
+
+```cmd
+compile.cmd
+```
+
+### Option 4: Compile directly with GCC
+
+#### Windows (PowerShell)
+```powershell
+gcc -std=c11 -Wall -Wextra -pedantic -O2 -Iinclude src\main.c src\lexer.c src\helper.c -o fidelis.exe
+.\fidelis.exe
+```
+
+#### macOS / Linux
+```bash
+gcc -std=c11 -Wall -Wextra -pedantic -O2 -Iinclude src/main.c src/lexer.c src/helper.c -o fidelis
+./fidelis
+```
+
+## Platform-specific instructions
+
+### Windows
+
+1. Open PowerShell in the project folder.
+2. Compile:
+
+```powershell
+gcc -std=c11 -Wall -Wextra -pedantic -O2 -Iinclude src\main.c src\lexer.c src\helper.c -o fidelis.exe
+```
+
+3. Run the default sample:
+
+```powershell
+.\fidelis.exe
+```
+
+4. Run a specific sample:
+
+```powershell
+.\fidelis.exe samples\test_features.swift
+```
+
+5. Or use the ready-made Windows helper script:
+
+```cmd
+compile.cmd
+```
+
+### macOS
+
+1. Open Terminal in the project folder.
+2. Compile:
+
+```bash
+gcc -std=c11 -Wall -Wextra -pedantic -O2 -Iinclude src/main.c src/lexer.c src/helper.c -o fidelis
+```
+
+3. Run the default sample:
+
+```bash
+./fidelis
+```
+
+4. Run a specific sample:
+
+```bash
+./fidelis samples/test_features.swift
+```
+
+5. Or run the Unix helper script:
+
+```bash
+chmod +x compile.sh
+./compile.sh
+```
+
+### Linux
+
+1. Open a shell in the project folder.
+2. Compile:
+
+```bash
+gcc -std=c11 -Wall -Wextra -pedantic -O2 -Iinclude src/main.c src/lexer.c src/helper.c -o fidelis
+```
+
+3. Run the default sample:
+
+```bash
+./fidelis
+```
+
+4. Run a specific sample:
+
+```bash
+./fidelis samples/test_features.swift
+```
+
+5. Or run the Unix helper script:
+
+```bash
+chmod +x compile.sh
+./compile.sh
+```
 
 ## Requirements
 
-- GCC or another C compiler supporting C11 standard or later
-- `make`
+- GCC or another C compiler supporting C11
+- `make` if you want to use the `make` workflow
+- A Unix shell for `compile.sh` or Windows Command Prompt for `compile.cmd`
 
 ## Build
 
@@ -29,23 +148,26 @@ The lexer is organized into three primary concerns:
 make
 ```
 
-This produces a `fidelis` executable in the repository root.
+This produces a `fidelis` binary in the repository root.
 
 ## Run
 
 ### Default input file
+
 ```bash
 ./fidelis
 ```
-Reads and tokenizes `samples/test_features.swift`.
+
+This reads `samples/test_features.swift`.
 
 ### Custom input file
+
 ```bash
 ./fidelis samples/test_features.swift
 ```
-Reads and tokenizes any specified file.
 
-### Build and run
+### Build and run in one command
+
 ```bash
 make run
 ```
@@ -59,11 +181,11 @@ make clean
 ## Complete Token Support
 
 ### Literals
-- **Integer**: `42`, `1234`
-- **Float**: `98.6`, `3.14`, `100.0`
-- **String**: `"hello world"` (preserves whitespace; `\"` stays inside the literal)
-- **Character**: `'A'`, `'x'`, `'!'`, `'\n'` (exactly one character or escape)
-- **Boolean**: `true`, `false`
+- Integer: `42`, `1234`
+- Float: `98.6`, `3.14`, `100.0`
+- String: `"hello world"` (whitespace is preserved)
+- Character: `'A'`, `'x'`, `'!'`, `'\n'`
+- Boolean: `true`, `false`
 
 ### Keywords
 
@@ -88,7 +210,7 @@ make clean
 #### Special Values
 - `true`, `false`, `null`
 
-### Noise Words (Automatically Discarded)
+### Noise Words (discarded automatically)
 - `is`, `then`, `do`, `to`
 
 These are recognized and filtered by the lexer; they do not appear in the token stream.
@@ -96,25 +218,25 @@ These are recognized and filtered by the lexer; they do not appear in the token 
 ### Operators
 
 #### Arithmetic
-- `+` `PLUS`, `-` `MINUS`, `*` `STAR`, `/` `SLASH`, `%` `PERCENT`, `\` `BACKSLASH`, `^` `CARET`
+- `+`, `-`, `*`, `/`, `%`, `\`, `^`
 
 #### Relational
-- `==` `EQ`, `!=` `NE`, `<` `LT`, `>` `GT`, `<=` `LE`, `>=` `GE`
+- `==`, `!=`, `<`, `>`, `<=`, `>=`
 
 #### Logical
-- `!` `NOT`, `&&` `AND`, `||` `OR`
+- `!`, `&&`, `||`
 
 #### Assignment
-- `=` `ASSIGN`, `+=` `PLUS_ASSIGN`, `-=` `MINUS_ASSIGN`, `*=` `STAR_ASSIGN`, `/=` `SLASH_ASSIGN`, `%=` `PERCENT_ASSIGN`
+- `=`, `+=`, `-=`, `*=`, `/=`, `%=`
 
 #### Special
-- `|>` `PIPELINE` (data flow operator)
-- `->` `ARROW` (function return type / match routing)
-- `?` `QUESTION` (optional-type suffix, as in `int?` and `string?`)
+- `|>` (pipeline)
+- `->` (arrow)
+- `?` (optional-type suffix)
 
-### Delimiters & Brackets
-- Delimiters: `;` `SEMICOLON`, `,` `COMMA`, `:` `COLON`
-- Brackets: `(` `LPAREN`, `)` `RPAREN`, `{` `LBRACE`, `}` `RBRACE`, `[` `LBRACKET`, `]` `RBRACKET`
+### Delimiters and brackets
+- `;`, `,`, `:`
+- `(`, `)`, `{`, `}`, `[`, `]`
 
 ### Comments
 
@@ -130,64 +252,42 @@ These are recognized and filtered by the lexer; they do not appear in the token 
    terminated only by the closing */
 ```
 
-Comments are returned as `LINE_COMMENT` and `BLOCK_COMMENT` tokens; the caller
-decides whether to display or ignore them.
+Comments are returned as `LINE_COMMENT` and `BLOCK_COMMENT` tokens; the caller decides whether to display or ignore them.
 
 ## Output Format
 
 The lexer prints each token in a fixed-width format:
 
-```
+```text
 Token Type: FLOAT_LITERAL       | Lexeme: 98.6
 Token Type: IDENTIFIER          | Lexeme: temperature
 Token Type: ASSIGN              | Lexeme: =
 Token Type: INT_LITERAL         | Lexeme: 42
 ```
 
-The token type is padded to 20 characters for visual alignment.
-
-## Implementation Details
-
-### Pure DFA Architecture
-
-The lexer uses a Deterministic Finite Automaton that processes the input character-by-character without using string comparison (`strcmp`). Each state represents a unique lexical position:
-
-- **State branching** for multi-character sequences (e.g., `==`, `->`, `|>`, `&&`, `||`, keyword prefixes)
-- **Keyword trie-like paths** where each branch represents a character in a keyword
-- **Operator lookahead** to distinguish single-character operators from their multi-character variants
-- **Iterative noise-word discarding** that restarts the scan loop, so long noise-word runs use constant stack
-
-### Macro System
-
-Three core macros keep the DFA implementation modular and maintainable:
-
-- `BRANCH_OR_IDENTIFIER()` — Continue down a keyword path or fall back to identifier
-- `YIELD_KEYWORD_OR_IDENTIFIER()` — Emit a keyword token or fall back to identifier if more letters follow
-- `DISCARD_NOISE_OR_IDENTIFIER()` — Discard noise words by restarting the scan loop, or treat as identifier
-
-For the state flow, token interface, and current implementation limitations,
-see [Lexer Design](docs/lexer-design.md).
-
 ## Samples
 
-### Full Language Example
+See `Fidelis.md` for the full language specification and examples.
 
-See `Fidelis.md` for the complete Fidelis language specification with syntax examples, precedence rules, and detailed feature descriptions.
-
-### Test File
-
-Run the lexer on the comprehensive test file:
+To test the lexer on the bundled sample source:
 
 ```bash
 ./fidelis samples/test_features.swift
 ```
 
-This exercises comments, floats, strings, characters, all keywords, operators, and noise-word handling.
-
 ## Notes
 
-- The lexer stores lexemes up to 255 characters; longer input is truncated rather than overflowing
-- Unrecognized characters produce `TOKEN_ERROR` tokens
-- Unterminated strings or block comments produce error tokens with a descriptive message
-- All whitespace (spaces, tabs, newlines) is treated as token separators and ignored
-- The lexer maintains the pure DFA design for efficiency and clarity
+- The lexer stores lexemes up to 255 characters before truncating
+- Unrecognized characters produce `TOKEN_ERROR`
+- Unterminated strings or block comments produce descriptive error tokens
+- Whitespace is ignored as a separator
+- The lexer follows a pure DFA architecture for efficient scanning
+
+## Script files
+
+The project includes helper scripts for compiling on each platform:
+
+- `compile.sh` — Unix/macOS build helper
+- `compile.cmd` — Windows build helper
+
+The scripts compile the same set of source files as `make` and produce the `fidelis` binary or `fidelis.exe` output.
