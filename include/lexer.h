@@ -125,7 +125,7 @@ typedef struct {
 // ============================================================================
 
 Token getNextToken(FILE *source);
-void printToken(Token t);
+void printToken(Token t, FILE *out);
 const char* getTokenTypeName(TokenType type);
 
 #endif

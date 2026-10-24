@@ -1,6 +1,7 @@
 #include "lexer.h"
 #include <ctype.h>
 #include <string.h>
+#include <stdlib.h>
 
 // ============================================================================
 // EXTENDED DFA STATES FOR FULL FIDELIS LEXICAL SPECIFICATION
@@ -997,21 +998,52 @@ const char* getTokenTypeName(TokenType type) {
     }
 }
 
-void printEscapedLexeme(const char* lexeme) {
+/*
+escapedLexeme - Handles how the lexeme will be printed. If the loop encounters a special character, it will print the corresponding
+                     special character (e.g \n is formatted as "\\n")
+    Update (Psalm) - Added FILE *fp parameter to mirror outputs to a file.
+
+Parameters
+    const char* lexeme - A pointer to the lexeme.
+*/
+char* escapedLexeme(const char* lexeme) {
+    char* escaped = calloc(1, 1024);
+    char current;
+
     for (int i = 0; lexeme[i] != '\0'; i++) {
-        switch (lexeme[i]) {
-            case '\n': printf("\\n"); break;
-            case '\t': printf("\\t"); break;
-            case '\r': printf("\\r"); break;
-            case '\0': printf("\\0"); break;
-            case '\\': printf("\\\\"); break;
-            default: putchar(lexeme[i]); break;
+      current = lexeme[i];
+        switch (current) {
+            case '\n': 
+              strcat(escaped, "\\n");
+              break;
+            case '\t': strcat(escaped, "\\t");
+              break;
+            case '\r': strcat(escaped, "\\r");
+              break;
+            case '\0': strcat(escaped, "\\0");
+              break;
+            case '\\': strcat(escaped, "\\\\");
+              break;
+            default: 
+              strcat(escaped, &current);
         }
     }
+    return escaped;
 }
 
-void printToken(Token t) {
-    printf("Token Type: %-20s | Lexeme: ", getTokenTypeName(t.type));
-    printEscapedLexeme(t.lexeme);
-    printf("\n");
+/*
+printToken - prints the Token Type and the Lexeme itself to the terminal, token by token.
+    Update (Psalm) - In conjunction, it also prints the token and the lexeme to a .txt file.
+
+Parameters:
+    Token t- The token currently being processed.
+    FILE *fp - A file pointer that points to the output file.
+*/
+void printToken(Token t, FILE *fp) {   
+    const char *tokenType = getTokenTypeName(t.type);
+    const char *lexeme = escapedLexeme(t.lexeme);
+    
+    if (fp){
+        fprintf(fp, "%-20s | %s\n" , tokenType, lexeme);
+    }
 }
