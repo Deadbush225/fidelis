@@ -430,6 +430,7 @@ Token getNextToken(FILE *source) {
                         token.lexeme[2] = '\0';
                         lexemeIdx = 0;
                         state = STATE_DONE;
+                        break;
                     default:
                         ungetc(c, source);
                         token.type = TOKEN_SLASH;
