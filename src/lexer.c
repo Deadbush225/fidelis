@@ -101,6 +101,14 @@ typedef enum {
 // Appends one character to the current lexeme. Input longer than the lexeme
 // buffer is truncated rather than written past the end.
 #define LEXEME_CAPACITY ((int)sizeof(token.lexeme))
+
+// Safely append one byte to token.lexeme and advance lexemeIdx.
+// Inputs:
+// - ch: character/byte to append
+// Side effects:
+// - Writes into token.lexeme when capacity remains
+// - Increments lexemeIdx on successful append
+// - Silently drops bytes after capacity is reached
 #define APPEND_CHAR(ch) \
     do { \
         if (lexemeIdx < LEXEME_CAPACITY - 1) { \
@@ -108,6 +116,12 @@ typedef enum {
         } \
     } while (0)
 
+// Transition helper for keyword DFA paths.
+// Behavior:
+// - If c matches expected_char, move to next_state and keep building lexeme.
+// - If c continues an identifier, fall back to STATE_IN_IDENTIFIER.
+// - Otherwise, c terminates the token: push it back and emit IDENTIFIER.
+// This avoids keyword text comparisons by deciding via state transitions.
 #define BRANCH_OR_IDENTIFIER(expected_char, next_state) \
     do { \
         if (c == expected_char) { \
@@ -124,6 +138,11 @@ typedef enum {
         } \
     } while(0)
 
+// Finalize a candidate keyword state.
+// Behavior:
+// - If c is still identifier content, this is not a standalone keyword,
+//   so continue as STATE_IN_IDENTIFIER.
+// - Otherwise, push c back, terminate lexeme, and emit the keyword token.
 #define YIELD_KEYWORD_OR_IDENTIFIER(token_type) \
     do { \
         if (isalnum(c) || c == '_') { \
@@ -137,6 +156,11 @@ typedef enum {
         } \
     } while(0)
 
+// Handle noise words that should be ignored unless they grow into identifiers.
+// Behavior:
+// - If c is identifier content, continue scanning as STATE_IN_IDENTIFIER.
+// - Otherwise, reset temporary token-building state and restart at STATE_START
+//   without recursion, so long runs of ignored text do not grow the call stack.
 #define DISCARD_NOISE_OR_IDENTIFIER() \
     do { \
         if (isalnum(c) || c == '_') { \
