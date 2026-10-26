@@ -12,11 +12,22 @@
 
 int main(int argc, char *argv[]) {
     printf("━━━━━━━━━━━━━━━━━━━━━ FIDELIS LEXICAL ANALYZER ━━━━━━━━━━━━━━━━━━━━━\n");
-    
-    const char *filename = (argc > 1) ? argv[1] : "samples/test_features.swift";
-    const char *outputName = (argc > 2) ? argv[2] : "outputs/symbol_table.txt";
-    
     /* ━━━━━━━━━━━━━━━━━━━━━━━ Lexical Preprocessing ━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+    const char *filename = (argc > 1) ? argv[1] : "samples/test_features.swift";
+    const char *outputName = "outputs/symbol_table.txt";
+
+    if (argc == 1) {
+        printf("\e[1;31mNo input file specified. Using default: %s (REMOVE THIS IN PROD!!!) \e[0m\n", filename);
+    }
+
+    // check if the input file extension is .fdls
+    const char *ext = strrchr(filename, '.'); 
+    if (ext == NULL || strcmp(ext, ".fdls") != 0) {
+        printf("\e[1;31mInvalid file extension. Please use a .fdls file. (ENFORCE THIS IN PROD!!!)\e[0m\n");
+        // return 1;
+    }
+
     // Open the input file for reading
     FILE *file = fopen(filename, "r");
     if (!file) {
@@ -46,9 +57,9 @@ int main(int argc, char *argv[]) {
         t = getNextToken(file);
         const char *tokenType = getTokenTypeName(t.type);
         char *lexeme = escapedLexeme(t.lexeme);
-          
+
         if (lexeme == NULL) {
-            fprintf(stderr, "Error allocating escaped lexeme\n");
+            printf("Error allocating escaped lexeme\n");
             fclose(file);
             fclose(output);
             return 1;
@@ -57,6 +68,9 @@ int main(int argc, char *argv[]) {
         fprintf(output, "%-20s | %s\n" , tokenType, lexeme);
         free(lexeme);
     } while (t.type != TOKEN_EOF);
+    
+    printf("Lexical analysis complete.\n");
+    printf("Output written to: %s\n", outputName);
 
     fclose(file);
     fclose(output);
