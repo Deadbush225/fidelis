@@ -116,6 +116,11 @@ typedef enum {
         } \
     } while (0)
 
+// Finalize the currently built lexeme as a specific token type.
+// Side effects:
+// - Null-terminates token.lexeme
+// - Sets token.type
+// - Ends the DFA loop by switching to STATE_DONE
 #define ACCEPT_LEXEME(_token) \
     do { \
         token.lexeme[lexemeIdx] = '\0'; \
@@ -123,6 +128,11 @@ typedef enum {
         state = STATE_DONE; \
     } while (0)
 
+// Emit a lexer error token with a fixed error message.
+// Side effects:
+// - Copies _str into token.lexeme
+// - Sets token type to TOKEN_ERROR
+// - Ends scanning for the current token
 #define ACCEPT_ERROR(_str) \
     do { \
         strcpy(token.lexeme, _str); \
@@ -141,12 +151,16 @@ typedef enum {
         ACCEPT_LEXEME(_token_type); \
     }
 
+// Switch-case helper for keyword DFA transitions.
+// On match, move to next_state and consume the matched character.
 #define CASE_X_BRANCH_TO(expected_char, next_state) \
     case expected_char: \
         state = next_state; \
         CONSUME_CHAR(c); \
         break;
 
+// Default switch-case helper for keyword DFA transitions.
+// If no keyword branch matches, resolve to identifier continuation/finalization.
 #define ELSE_CHECK_IF_POSSIBLE_IDENTIFIER() \
     default: \
         ACCEPT_TOKEN_OR_IDENTIFIER(TOKEN_IDENTIFIER) \
