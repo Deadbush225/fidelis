@@ -130,6 +130,28 @@ typedef enum {
         state = STATE_DONE; \
     } while (0)
 
+// Identifier Recognizer - if it's alphanumeric, keep building an identifier 
+// Otherwise, accept the token.
+#define ACCEPT_TOKEN_OR_IDENTIFIER(_token_type) \
+    if (isalnum(c) || c == '_') { \
+        state = STATE_IN_IDENTIFIER; \
+        CONSUME_CHAR(c); \
+    } else { \
+        ungetc(c, source); \
+        ACCEPT_LEXEME(_token_type); \
+    }
+
+#define CASE_X_BRANCH_TO(expected_char, next_state) \
+    case expected_char: \
+        state = next_state; \
+        CONSUME_CHAR(c); \
+        break;
+
+#define ELSE_CHECK_IF_POSSIBLE_IDENTIFIER() \
+    default: \
+        ACCEPT_TOKEN_OR_IDENTIFIER(TOKEN_IDENTIFIER) \
+        break;
+
 // Transition helper for keyword DFA paths.
 // Behavior:
 // - If c matches expected_char, move to next_state and keep building lexeme.
@@ -138,15 +160,9 @@ typedef enum {
 // This avoids keyword text comparisons by deciding via state transitions.
 #define CAN_WE_BRANCH_OR_IDENTIFIER(expected_char, next_state) \
     do { \
-        if (c == expected_char) { \
-            state = next_state; \
-            CONSUME_CHAR(c); \
-        } else if (isalnum(c) || c == '_') { \
-            state = STATE_IN_IDENTIFIER; \
-            CONSUME_CHAR(c); \
-        } else { \
-            ungetc(c, source); \
-            ACCEPT_LEXEME(TOKEN_IDENTIFIER); \
+        switch (c) { \
+            CASE_X_BRANCH_TO(expected_char, next_state); \
+            ELSE_CHECK_IF_POSSIBLE_IDENTIFIER(); \
         } \
     } while(0)
 
@@ -157,13 +173,7 @@ typedef enum {
 // - Otherwise, push c back, terminate lexeme, and emit the keyword token.
 #define CONFIRM_KEYWORD_OR_IDENTIFIER(token_type) \
     do { \
-        if (isalnum(c) || c == '_') { \
-            state = STATE_IN_IDENTIFIER; \
-            CONSUME_CHAR(c); \
-        } else { \
-            ungetc(c, source); \
-            ACCEPT_LEXEME(token_type); \
-        } \
+        ACCEPT_TOKEN_OR_IDENTIFIER(token_type) \
     } while(0)
 
 // ============================================================================
@@ -432,8 +442,7 @@ Token getNextToken(FILE *source) {
                         CONSUME_CHAR(c);
                         break;
                     case EOF:
-                        strcpy(token.lexeme, "Unterminated block comment");
-                        ACCEPT_LEXEME(TOKEN_ERROR);
+                        ACCEPT_LEXEME(TOKEN_ERROR); // Unterminated block comment
                         break;
                     default:
                         CONSUME_CHAR(c);
@@ -511,6 +520,7 @@ Token getNextToken(FILE *source) {
                     // the token text matches the source.
                     escaped = 0;
                     CONSUME_CHAR(c);
+                    break;
                 }
                 
                 switch (c) {
@@ -707,27 +717,10 @@ Token getNextToken(FILE *source) {
             // 'i' BRANCH: is, int, if
             case STATE_I:
                 switch (c) {
-                    case 's':
-                        state = STATE_IS;
-                        CONSUME_CHAR(c);
-                        break;
-                    case 'n':
-                        state = STATE_IN_KW;
-                        CONSUME_CHAR(c);
-                        break;
-                    case 'f':
-                        state = STATE_IF;
-                        CONSUME_CHAR(c);
-                        break;
-                    default:
-                        if (isalnum(c) || c == '_') {
-                            state = STATE_IN_IDENTIFIER;
-                            CONSUME_CHAR(c);
-                        } else {
-                            ungetc(c, source);
-                            ACCEPT_LEXEME(TOKEN_IDENTIFIER);
-                        }
-                        break;
+                    CASE_X_BRANCH_TO('s', STATE_IS);
+                    CASE_X_BRANCH_TO('n', STATE_IN_KW);
+                    CASE_X_BRANCH_TO('f', STATE_IF);
+                    ELSE_CHECK_IF_POSSIBLE_IDENTIFIER();
                 }
                 break;
             case STATE_IS: CONFIRM_KEYWORD_OR_IDENTIFIER(TOKEN_NOISE_WORD); break;
@@ -742,64 +735,20 @@ Token getNextToken(FILE *source) {
             // 's' BRANCH: state, string, sleep
             case STATE_S:
                 switch (c) {
-                    case 't':
-                        state = STATE_ST;
-                        CONSUME_CHAR(c);
-                        break;
-                    case 'l':
-                        state = STATE_SL;
-                        CONSUME_CHAR(c);
-                        break;
-                    default:
-                        if (isalnum(c) || c == '_') {
-                            state = STATE_IN_IDENTIFIER;
-                            CONSUME_CHAR(c);
-                        } else {
-                            ungetc(c, source);
-                            ACCEPT_LEXEME(TOKEN_IDENTIFIER);
-                        }
-                        break;
+                    CASE_X_BRANCH_TO('t', STATE_ST);
+                    CASE_X_BRANCH_TO('l', STATE_SL);
+                    ELSE_CHECK_IF_POSSIBLE_IDENTIFIER();
                 }
                 break;
             case STATE_ST:
                 switch (c) {
-                    case 'a':
-                        state = STATE_STA;
-                        CONSUME_CHAR(c);
-                        break;
-                    case 'r':
-                        state = STATE_STR;
-                        CONSUME_CHAR(c);
-                        break;
-                    default:
-                        if (isalnum(c) || c == '_') {
-                            state = STATE_IN_IDENTIFIER;
-                            CONSUME_CHAR(c);
-                        } else {
-                            ungetc(c, source);
-                            ACCEPT_LEXEME(TOKEN_IDENTIFIER);
-                        }
-                        break;
+                    CASE_X_BRANCH_TO('a', STATE_STA);
+                    CASE_X_BRANCH_TO('r', STATE_STR);
+                    ELSE_CHECK_IF_POSSIBLE_IDENTIFIER();
                 }
                 break;
             case STATE_STA: CAN_WE_BRANCH_OR_IDENTIFIER('t', STATE_STAT); break;
-            case STATE_STAT:
-                switch (c) {
-                    case 'e':
-                        state = STATE_STATE_KW;
-                        CONSUME_CHAR(c);
-                        break;
-                    default:
-                        if (isalnum(c) || c == '_') {
-                            state = STATE_IN_IDENTIFIER;
-                            CONSUME_CHAR(c);
-                        } else {
-                            ungetc(c, source);
-                            ACCEPT_LEXEME(TOKEN_IDENTIFIER);
-                        }
-                        break;
-                }
-                break;
+            case STATE_STAT: CAN_WE_BRANCH_OR_IDENTIFIER('e', STATE_STATE_KW); break;
             case STATE_STATE_KW: CONFIRM_KEYWORD_OR_IDENTIFIER(TOKEN_STATE); break;
             case STATE_STR: CAN_WE_BRANCH_OR_IDENTIFIER('i', STATE_STRI); break;
             case STATE_STRI: CAN_WE_BRANCH_OR_IDENTIFIER('n', STATE_STRIN); break;
@@ -813,23 +762,9 @@ Token getNextToken(FILE *source) {
             // 'e' BRANCH: ensure, else
             case STATE_E:
                 switch (c) {
-                    case 'n':
-                        state = STATE_EN;
-                        CONSUME_CHAR(c);
-                        break;
-                    case 'l':
-                        state = STATE_EL;
-                        CONSUME_CHAR(c);
-                        break;
-                    default:
-                        if (isalnum(c) || c == '_') {
-                            state = STATE_IN_IDENTIFIER;
-                            CONSUME_CHAR(c);
-                        } else {
-                            ungetc(c, source);
-                            ACCEPT_LEXEME(TOKEN_IDENTIFIER);
-                        }
-                        break;
+                    CASE_X_BRANCH_TO('n', STATE_EN);
+                    CASE_X_BRANCH_TO('l', STATE_EL);
+                    ELSE_CHECK_IF_POSSIBLE_IDENTIFIER();
                 }
                 break;
             case STATE_EN: CAN_WE_BRANCH_OR_IDENTIFIER('s', STATE_ENS); break;
@@ -844,45 +779,17 @@ Token getNextToken(FILE *source) {
             // 't' BRANCH: to, then, transition, true
             case STATE_T:
                 switch (c) {
-                    case 'o':
-                        state = STATE_TO;
-                        CONSUME_CHAR(c);
-                        break;
-                    case 'r':
-                        state = STATE_TR;
-                        CONSUME_CHAR(c);
-                        break;
-                    default:
-                        if (isalnum(c) || c == '_') {
-                            state = STATE_IN_IDENTIFIER;
-                            CONSUME_CHAR(c);
-                        } else {
-                            ungetc(c, source);
-                            ACCEPT_LEXEME(TOKEN_IDENTIFIER);
-                        }
-                        break;
+                    CASE_X_BRANCH_TO('o', STATE_TO);
+                    CASE_X_BRANCH_TO('r', STATE_TR);
+                    ELSE_CHECK_IF_POSSIBLE_IDENTIFIER();
                 }
                 break;
             case STATE_TO: CONFIRM_KEYWORD_OR_IDENTIFIER(TOKEN_NOISE_WORD); break;
             case STATE_TR:
                 switch (c) {
-                    case 'a':
-                        state = STATE_TRA;
-                        CONSUME_CHAR(c);
-                        break;
-                    case 'u':
-                        state = STATE_TRU;
-                        CONSUME_CHAR(c);
-                        break;
-                    default:
-                        if (isalnum(c) || c == '_') {
-                            state = STATE_IN_IDENTIFIER;
-                            CONSUME_CHAR(c);
-                        } else {
-                            ungetc(c, source);
-                            ACCEPT_LEXEME(TOKEN_IDENTIFIER);
-                        }
-                        break;
+                    CASE_X_BRANCH_TO('a', STATE_TRA);
+                    CASE_X_BRANCH_TO('u', STATE_TRU);
+                    ELSE_CHECK_IF_POSSIBLE_IDENTIFIER();
                 }
                 break;
             case STATE_TRA: CAN_WE_BRANCH_OR_IDENTIFIER('n', STATE_TRAN); break;
@@ -911,31 +818,11 @@ Token getNextToken(FILE *source) {
             // 'f' BRANCH: float, false, fn, for
             case STATE_F:
                 switch (c) {
-                    case 'l':
-                        state = STATE_FL;
-                        CONSUME_CHAR(c);
-                        break;
-                    case 'a':
-                        state = STATE_FA;
-                        CONSUME_CHAR(c);
-                        break;
-                    case 'n':
-                        state = STATE_FN;
-                        CONSUME_CHAR(c);
-                        break;
-                    case 'o':
-                        state = STATE_FO;
-                        CONSUME_CHAR(c);
-                        break;
-                    default:
-                        if (isalnum(c) || c == '_') {
-                            state = STATE_IN_IDENTIFIER;
-                            CONSUME_CHAR(c);
-                        } else {
-                            ungetc(c, source);
-                            ACCEPT_LEXEME(TOKEN_IDENTIFIER);
-                        }
-                        break;
+                    CASE_X_BRANCH_TO('l', STATE_FL);
+                    CASE_X_BRANCH_TO('a', STATE_FA);
+                    CASE_X_BRANCH_TO('n', STATE_FN);
+                    CASE_X_BRANCH_TO('o', STATE_FO);
+                    ELSE_CHECK_IF_POSSIBLE_IDENTIFIER();
                 }
                 break;
             case STATE_FL: CAN_WE_BRANCH_OR_IDENTIFIER('o', STATE_FLO); break;
@@ -959,65 +846,23 @@ Token getNextToken(FILE *source) {
             // 'r' BRANCH: react, return, readline, readint
             case STATE_R:
                 switch (c) {
-                    case 'e':
-                        state = STATE_RE;
-                        CONSUME_CHAR(c);
-                        break;
-                    default:
-                        if (isalnum(c) || c == '_') {
-                            state = STATE_IN_IDENTIFIER;
-                            CONSUME_CHAR(c);
-                        } else {
-                            ungetc(c, source);
-                            ACCEPT_LEXEME(TOKEN_IDENTIFIER);
-                        }
-                        break;
+                    CASE_X_BRANCH_TO('e', STATE_RE);
+                    ELSE_CHECK_IF_POSSIBLE_IDENTIFIER();
                 }
                 break;
             case STATE_RE:
                 switch (c) {
-                    case 'a':
-                        state = STATE_REA;
-                        CONSUME_CHAR(c);
-                        break;
-                    case 't':
-                        state = STATE_RET;
-                        CONSUME_CHAR(c);
-                        break;
-                    case 'd':
-                        state = STATE_READ;
-                        CONSUME_CHAR(c);
-                        break;
-                    default:
-                        if (isalnum(c) || c == '_') {
-                            state = STATE_IN_IDENTIFIER;
-                            CONSUME_CHAR(c);
-                        } else {
-                            ungetc(c, source);
-                            ACCEPT_LEXEME(TOKEN_IDENTIFIER);
-                        }
-                        break;
+                    CASE_X_BRANCH_TO('a', STATE_REA);
+                    CASE_X_BRANCH_TO('t', STATE_RET);
+                    CASE_X_BRANCH_TO('d', STATE_READ);
+                    ELSE_CHECK_IF_POSSIBLE_IDENTIFIER();
                 }
                 break;
             case STATE_REA:
                 switch (c) {
-                    case 'c':
-                        state = STATE_REAC;
-                        CONSUME_CHAR(c);
-                        break;
-                    case 'd':
-                        state = STATE_READ;
-                        CONSUME_CHAR(c);
-                        break;
-                    default:
-                        if (isalnum(c) || c == '_') {
-                            state = STATE_IN_IDENTIFIER;
-                            CONSUME_CHAR(c);
-                        } else {
-                            ungetc(c, source);
-                            ACCEPT_LEXEME(TOKEN_IDENTIFIER);
-                        }
-                        break;
+                    CASE_X_BRANCH_TO('c', STATE_REAC);
+                    CASE_X_BRANCH_TO('d', STATE_READ);
+                    ELSE_CHECK_IF_POSSIBLE_IDENTIFIER();
                 }
                 break;
             case STATE_REAC: CAN_WE_BRANCH_OR_IDENTIFIER('t', STATE_REACT); break;
@@ -1028,23 +873,9 @@ Token getNextToken(FILE *source) {
             case STATE_RETURN: CONFIRM_KEYWORD_OR_IDENTIFIER(TOKEN_RETURN); break;
             case STATE_READ:
                 switch (c) {
-                    case 'L':
-                        state = STATE_READL;
-                        CONSUME_CHAR(c);
-                        break;
-                    case 'I':
-                        state = STATE_READI;
-                        CONSUME_CHAR(c);
-                        break;
-                    default:
-                        if (isalnum(c) || c == '_') {
-                            state = STATE_IN_IDENTIFIER;
-                            CONSUME_CHAR(c);
-                        } else {
-                            ungetc(c, source);
-                            ACCEPT_LEXEME(TOKEN_IDENTIFIER);
-                        }
-                        break;
+                    CASE_X_BRANCH_TO('L', STATE_READL);
+                    CASE_X_BRANCH_TO('I', STATE_READI);
+                    ELSE_CHECK_IF_POSSIBLE_IDENTIFIER();
                 }
                 break;
             case STATE_READL: CAN_WE_BRANCH_OR_IDENTIFIER('i', STATE_READLI); break;
@@ -1199,4 +1030,3 @@ const char* getTokenTypeName(TokenType type) {
         default:                    return "UNKNOWN";
     }
 }
-
