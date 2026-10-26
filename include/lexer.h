@@ -106,6 +106,9 @@ typedef enum {
     TOKEN_LINE_COMMENT,
     TOKEN_BLOCK_COMMENT,
 
+    // ---- Noise Words ----
+    TOKEN_NOISE_WORD,
+
     // ---- Special ----
     TOKEN_EOF,
     TOKEN_ERROR

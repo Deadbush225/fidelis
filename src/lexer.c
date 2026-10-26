@@ -44,7 +44,7 @@ typedef enum {
     STATE_D, STATE_DO,
 
     // 't' branch: to, then, transition, true
-    STATE_T, STATE_TO, STATE_TH, STATE_THE, STATE_THEN,
+    STATE_T, STATE_TO,
     STATE_TR, STATE_TRA, STATE_TRAN, STATE_TRANS, STATE_TRANSI, STATE_TRANSIT, STATE_TRANSITI, STATE_TRANSITIO, STATE_TRANSITION,
     STATE_TRU, STATE_TRUE,
 
@@ -153,27 +153,6 @@ typedef enum {
             token.lexeme[lexemeIdx] = '\0'; \
             token.type = token_type; \
             state = STATE_DONE; \
-        } \
-    } while(0)
-
-// Handle noise words that should be ignored unless they grow into identifiers.
-// Behavior:
-// - If c is identifier content, continue scanning as STATE_IN_IDENTIFIER.
-// - Otherwise, reset temporary token-building state and restart at STATE_START
-//   without recursion, so long runs of ignored text do not grow the call stack.
-#define DISCARD_NOISE_OR_IDENTIFIER() \
-    do { \
-        if (isalnum(c) || c == '_') { \
-            state = STATE_IN_IDENTIFIER; \
-            APPEND_CHAR(c); \
-        } else { \
-            /* Restart scanning in the caller's loop instead of recursing so a \
-             * long run of noise words cannot exhaust the stack. */ \
-            ungetc(c, source); \
-            lexemeIdx = 0; \
-            escaped = 0; \
-            token.lexeme[0] = '\0'; \
-            state = STATE_START; \
         } \
     } while(0)
 
@@ -717,14 +696,14 @@ Token getNextToken(FILE *source) {
                 else if (isalnum(c) || c == '_') { state = STATE_IN_IDENTIFIER; APPEND_CHAR(c); }
                 else { ungetc(c, source); token.lexeme[lexemeIdx] = '\0'; token.type = TOKEN_IDENTIFIER; state = STATE_DONE; }
                 break;
-            case STATE_IS: DISCARD_NOISE_OR_IDENTIFIER(); break;
+            case STATE_IS: YIELD_KEYWORD_OR_IDENTIFIER(TOKEN_NOISE_WORD); break;
             case STATE_IN_KW: BRANCH_OR_IDENTIFIER('t', STATE_INT); break;
             case STATE_INT: YIELD_KEYWORD_OR_IDENTIFIER(TOKEN_INT); break;
             case STATE_IF: YIELD_KEYWORD_OR_IDENTIFIER(TOKEN_IF); break;
 
             // 'd' BRANCH: do
             case STATE_D: BRANCH_OR_IDENTIFIER('o', STATE_DO); break;
-            case STATE_DO: DISCARD_NOISE_OR_IDENTIFIER(); break;
+            case STATE_DO: YIELD_KEYWORD_OR_IDENTIFIER(TOKEN_NOISE_WORD); break;
 
             // 's' BRANCH: state, string, sleep
             case STATE_S:
@@ -774,15 +753,11 @@ Token getNextToken(FILE *source) {
             // 't' BRANCH: to, then, transition, true
             case STATE_T:
                 if (c == 'o') { state = STATE_TO; APPEND_CHAR(c); }
-                else if (c == 'h') { state = STATE_TH; APPEND_CHAR(c); }
                 else if (c == 'r') { state = STATE_TR; APPEND_CHAR(c); }
                 else if (isalnum(c) || c == '_') { state = STATE_IN_IDENTIFIER; APPEND_CHAR(c); }
                 else { ungetc(c, source); token.lexeme[lexemeIdx] = '\0'; token.type = TOKEN_IDENTIFIER; state = STATE_DONE; }
                 break;
-            case STATE_TO: DISCARD_NOISE_OR_IDENTIFIER(); break;
-            case STATE_TH: BRANCH_OR_IDENTIFIER('e', STATE_THE); break;
-            case STATE_THE: BRANCH_OR_IDENTIFIER('n', STATE_THEN); break;
-            case STATE_THEN: DISCARD_NOISE_OR_IDENTIFIER(); break;
+            case STATE_TO: YIELD_KEYWORD_OR_IDENTIFIER(TOKEN_NOISE_WORD); break;
             case STATE_TR:
                 if (c == 'a') { state = STATE_TRA; APPEND_CHAR(c); }
                 else if (c == 'u') { state = STATE_TRU; APPEND_CHAR(c); }
@@ -1016,6 +991,7 @@ const char* getTokenTypeName(TokenType type) {
 
         case TOKEN_LINE_COMMENT:    return "LINE_COMMENT";
         case TOKEN_BLOCK_COMMENT:   return "BLOCK_COMMENT";
+        case TOKEN_NOISE_WORD:      return "NOISE_WORD";
         case TOKEN_EOF:             return "EOF";
         case TOKEN_ERROR:           return "TOKEN_ERROR";
         default:                    return "UNKNOWN";
