@@ -32,7 +32,7 @@ loop {
 
 // Comment with noise words
 int value is = 5;
-ensure int x then { print("Valid"); }
+int x = ensure value else { print("Invalid, retry again"); transition to Running; };
 state Boot do { print("Booting"); }
 transition to Dashboard;
 

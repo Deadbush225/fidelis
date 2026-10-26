@@ -1,141 +1,123 @@
 /* ==========================================
  THE TERMINAL FSM: SMART HOME DASHBOARD
  ========================================== */
-// Language Documentation: Behavior, Semantics, and Control Flow
 
 // 1. GLOBAL STATE
-// Uses Type-First declarations with lowercase primitives. No 'let' or ':'.
-bool lightsOn = false
-int roomTemp = 22
-int masterPin = 1234
-
-// NEW: Array Declaration
-[string] accessLogs = ["System Booted", "Thermostat Initialized"]
+bool lightsOn = false;
+int roomTemp = 22;
+int masterPin = 1234;
+[string] accessLogs = ["System Booted", "Thermostat Initialized"];
 
 // 2. DATA-DRIVEN WATCHERS (react)
-// Watchers trigger automatically when bound variables update via '='.
 react (lightsOn) {
-    // NEW: Ternary operator for concise conditional assignment
-    string status = (lightsOn == true) ? "illuminated" : "extinguished"
-    
-    // NEW: String interpolation (F-string equivalent)
-    print("[SYSTEM EVENT] Living room lights {status}.")
+    string status = (lightsOn == true) ? "illuminated" : "extinguished";
+    print("[SYSTEM EVENT] Living room lights " + status + ".");
 }
 
 react (roomTemp) {
-    print("[SYSTEM EVENT] Thermostat calibrated to {roomTemp}C.")
+    print("[SYSTEM EVENT] Thermostat calibrated to " + roomTemp + "C.");
 }
 
 // 3. CUSTOM FUNCTIONS (fn)
-// Functions explicitly declare their parameter types and return type.
 fn formatStatus(bool status) -> string {
-    return (status == true) ? "ACTIVE" : "INACTIVE"
+    return (status == true) ? "ACTIVE" : "INACTIVE";
 }
 
 fn removeSpaces(string text) -> string {
-    // Assumes a built-in 'replace' utility
-    return replace(text, " ", "")
+    return replace(text, " ", "");
 }
 
 // 4. ISOLATED STATES (state & transition)
-// Execution requires explicit 'transition' routing. 'to' is an optional noise word.
 state Boot {
-    print("--- SYSTEM LOCKED ---")
-    print("Enter 4-digit numeric PIN:")
+    print("--- SYSTEM LOCKED ---");
+    print("Enter 4-digit numeric PIN:");
     
-    // 5. THE PIPELINE OPERATOR (|>)
-    // Passes the left-hand result as the first argument to the right-hand function.
-    int? input = readLine() |> removeSpaces() |> toInt()
+    int? input = readInt();
     
-    // 6. THE SAFE GATEWAY (ensure)
-    // Safely unwraps an Optional into a strict primitive (Type-First).
-    ensure int pin = input else {
-        print("[ERROR] PIN must contain only numbers.")
-        transition to Boot
+    // ensure explicitly declaring the type of the new variable
+    int pin = ensure input else {
+        print("[ERROR] PIN must contain only numbers.");
+        transition to Boot;
     }
     
     if (pin == masterPin) {
-        print("Access granted.")
-        transition to Dashboard
+        print("Access granted.");
+        transition to Dashboard;
     } else {
-        print("Incorrect PIN.")
-        transition to Boot
+        print("Incorrect PIN.");
+        transition to Boot;
     }
 }
 
 state Dashboard {
-    print("\n--- IOT MAIN MENU ---")
-    print("1: Toggle Lights")
-    print("2: Set Temperature")
-    print("3: View System Status")
-    print("4: Lock System")
+    print("\n--- IOT MAIN MENU ---");
+    print("1: Toggle Lights");
+    print("2: Set Temperature");
+    print("3: View System Status");
+    print("4: Lock System");
     
-    // 7. EXPLICIT LOOPING (loop)
-    // Infinite blocking block broken only by a transition.
     loop {
-        print("\nSelect an action (1-4):")
-        string choice = readLine() |> removeSpaces()
+        print("\nSelect an action (1-4):");
+        
+        // Pipeline used purely for string manipulation
+        string choice = readLine() |> removeSpaces();
         
         match choice {
-            "1" -> transition to LightControl
-            "2" -> transition to TempControl
-            "3" -> transition to StatusView
-            "4" -> transition to Boot
-            ""  -> print("") 
-            _   -> print("Unknown command.")
+            "1" -> transition to LightControl;
+            "2" -> transition to TempControl;
+            "3" -> transition to StatusView;
+            "4" -> transition to Boot;
+            ""  -> print("");
+            _   -> print("Unknown command.");
         }
     }
 }
 
 state LightControl {
-    lightsOn = (lightsOn == true) ? false : true 
-    transition to Dashboard
+    lightsOn = (lightsOn == true) ? false : true;
+    transition to Dashboard;
 }
 
 state TempControl {
-    print("\nCurrent temperature is {roomTemp}C.")
+    print("\nCurrent temperature is " + roomTemp + "C.");
     
     loop {
-        print("Enter new target temperature (or 'cancel'):")
+        print("Enter new target temperature (-99 to cancel):");
         
-        string tempInput = readLine()
+        int? newTemp = readInt();
         
-        if (tempInput == "cancel") {
-            transition to Dashboard
+        int validTemp = ensure newTemp else {
+            print("[ERROR] Temperature must be a number.");
+            transition to TempControl;
+        }
+        
+        if (validTemp == -99) {
+            transition to Dashboard;
+        } else if (validTemp < 16) {
+            print("Error: Minimum temperature is 16C.");
+        } else if (validTemp > 30) {
+            print("Error: Maximum temperature is 30C.");
         } else {
-            int? newTemp = tempInput |> removeSpaces() |> toInt()
-            
-            ensure int validTemp = newTemp else {
-                print("[ERROR] Temperature must be a number.")
-                transition to TempControl 
-            }
-            
-            // NEW: Single-line 'if' statements without curly braces
-            if (validTemp < 16) print("Error: Minimum temperature is 16C.")
-            else if (validTemp > 30) print("Error: Maximum temperature is 30C.")
-            else {
-                roomTemp = validTemp
-                transition to Dashboard
-            }
+            roomTemp = validTemp;
+            transition to Dashboard;
         }
     }
 }
 
 state StatusView {
-    print("\n--- SYSTEM STATUS ---")
+    print("\n--- SYSTEM STATUS ---");
     
-    string lightDisplay = lightsOn |> formatStatus()
-    print("Lights: {lightDisplay}") 
-    print("Thermostat: {roomTemp}C") 
+    string lightDisplay = lightsOn |> formatStatus();
+    print("Lights: " + lightDisplay);
+    print("Thermostat: " + roomTemp + "C");
     
-    print("\n--- RECENT LOGS ---")
-    // NEW: Array access and standard for-loop iteration
-    for (int i = 0; i < length(accessLogs); i++) {
-        print("- Log {i}: {accessLogs[i]}")
+    print("\n--- RECENT LOGS ---");
+    for (int i = 0; i < length(accessLogs); i += 1) {
+        print("- Log " + i + ": " + accessLogs[i]);
     }
     
-    print("\nPress Enter to return to Dashboard.")
-    string wait = readLine() 
+    print("\nPress Enter to return to Dashboard.");
+    string wait = readLine();
     
-    transition to Dashboard
+    transition to Dashboard;
 }
