@@ -68,20 +68,21 @@ whole and reported as `TOKEN_ERROR` instead of being split into a number and an
 identifier. Identifiers longer than the 32-character limit are also reported as
 `TOKEN_ERROR`.
 
-The keyword/noise-word macros in `lexer.c` support the DFA branches:
+The keyword DFA uses helper macros in `lexer.c`:
 
-- `BRANCH_OR_IDENTIFIER` continues a keyword match or falls back to an
-  identifier.
-- `YIELD_KEYWORD_OR_IDENTIFIER` emits a completed keyword only at a word
-  boundary.
-- `DISCARD_NOISE_OR_IDENTIFIER` discards a completed noise word, unless it is
-  part of a longer identifier. It restarts the scan loop rather than calling
-  `getNextToken()` again, so noise-word runs of any length use constant stack.
-- `APPEND_CHAR` appends one character while keeping the lexeme inside its
+- `CASE_X_BRANCH_TO` follows a matching character to the next keyword state.
+- `ELSE_CHECK_IF_POSSIBLE_IDENTIFIER` falls back to identifier handling when
+  the current characters do not match a keyword branch.
+- `CAN_WE_BRANCH_OR_IDENTIFIER` advances a keyword match or continues scanning
+  the input as an identifier.
+- `CONFIRM_KEYWORD_OR_IDENTIFIER` emits a completed keyword at a word boundary,
+  or continues as an identifier if more identifier characters follow.
+- `CONSUME_CHAR` appends one character while keeping the lexeme inside its
   buffer.
 
-The noise words `is`, `then`, `do`, and `to` are discarded rather than returned
-as tokens.
+The noise words `is`, `then`, `do`, and `to` are returned as
+`TOKEN_NOISE_WORD`. The lexer does not discard them; a caller that wants to
+ignore noise words must filter that token type.
 
 The keyword paths are case-sensitive. Most are lowercase; the input spellings
 for the I/O keywords are `readLine` and `readInt`. `string` shares its `s`
@@ -92,8 +93,11 @@ not shadow one another.
 
 An initial digit enters the integer state. Further digits extend the integer;
 a period switches scanning to the float state. Digits after the period extend
-the float. The first character that does not belong to the number is put back
-for the next token.
+the float. If a letter or underscore immediately follows the digits, the lexer
+consumes the rest of that identifier-like sequence and emits one
+`TOKEN_ERROR` (for example, `42items` is not split into an integer and an
+identifier). Otherwise, the first character that does not belong to the number
+is put back for the next token.
 
 The current implementation does not require a digit after the decimal point
 and does not validate numeric range. It also does not recognize a leading
@@ -104,14 +108,17 @@ decimal point as a float.
 Double-quoted input is scanned as a string until the next unescaped double
 quote. A backslash keeps the following byte inside the string, so `"a\"b"` is a
 single `TOKEN_STRING_LITERAL`. Escapes are preserved verbatim in the lexeme;
-the lexer does not decode them. A newline or end-of-file before the closing
-quote produces `TOKEN_ERROR` with an "Unterminated string" lexeme.
+the lexer does not decode them. An unescaped newline, carriage return, or
+end-of-file before the closing quote produces `TOKEN_ERROR`. For an unterminated
+string, the lexeme contains the source text scanned so far; it is not replaced
+with a fixed "Unterminated string" diagnostic.
 
 Single-quoted input is scanned as a character literal. A valid literal holds
 exactly one character or one backslash escape, such as `'A'`, `'\n'`, or
-`'\''`. An empty literal reports "Empty char literal", more than one character
-reports "Char literal too long", and a missing closing quote reports
-"Unterminated char". All three are `TOKEN_ERROR`.
+`'\''`. An empty literal produces `TOKEN_ERROR` with the lexeme
+"Empty char literal", more than one character produces `TOKEN_ERROR` with
+"Char literal too long", and a missing closing quote produces `TOKEN_ERROR`
+with "Unterminated char".
 
 ### Operators and punctuation
 
@@ -152,14 +159,16 @@ decides whether to print, preserve, or ignore them.
 
 ## Current limitations and maintenance notes
 
-- `Token.lexeme` has a fixed capacity of 256 bytes. Every scanner path appends
-  through `APPEND_CHAR()`, which stops at the capacity limit, so over-long
-  input is truncated instead of writing past the buffer. Truncation is silent:
-  a literal longer than 255 characters is emitted as a short token rather than
-  an error.
+- `Token.lexeme` has a fixed capacity of 256 bytes. The scanner's
+  `CONSUME_CHAR()` helper stops at the capacity limit, so over-long input is
+  truncated instead of writing past the buffer. Truncation is silent for
+  literals and comments; identifiers longer than 32 characters instead
+  produce `TOKEN_ERROR` (their lexeme is still limited to 255 bytes).
 - Tokens do not carry source line or column locations.
-- The lexer reports an error token but does not recover a whole malformed
-  construct or provide a structured diagnostic beyond the token lexeme.
+- `TOKEN_ERROR` lexemes are not a uniform diagnostic format: some error paths
+  retain the scanned source text, while others use a fixed message. Errors do
+  not include structured diagnostics or source locations, and recovery from a
+  malformed construct is limited.
 - Numeric literals are not validated: there is no exponent syntax, no range
   check, and a float may omit digits after the decimal point.
 - The code is the source of truth for actual behavior. When language rules
