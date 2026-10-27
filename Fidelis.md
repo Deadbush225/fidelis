@@ -426,7 +426,7 @@ Defined Noise Words:
 
 - **do**
 
-- **To**
+- **to**
 
 Because noise words are discarded, the parser evaluates statements
 exactly the same whether the programmer includes them or not. This
@@ -911,10 +911,10 @@ default fallback case to catch unhandled inputs.
 ```
 // Case Matching
 match choice {
-    "1" -> transition to LightControl
-    "2" -> transition to TempControl
-    "" -> print("")
-    _ -> print("Unknown command.")
+    "1" -> transition to LightControl;
+    "2" -> transition to TempControl;
+    "" -> print("");
+    _ -> print("Unknown command.");
 }
 ```
 
@@ -923,12 +923,12 @@ match choice {
 ```
 // Case Matching with blocks
 match choice {
-    "1" -> transition to LightControl
+    "1" -> transition to LightControl;
     "2" -> {
         print("Initializing climate interface...");
         transition to TempControl;
     }
-    "3" -> transition to StatusView
+    "3" -> transition to StatusView;
     _ -> {
         invalidAttempts += 1;
         print("Unknown command. Attempts: {invalidAttempts}");
@@ -960,7 +960,7 @@ loop {
 ```
 // Iterating through an array using an index
 [int] scores = [90, 85, 88];
-for (int i = 0; i < length(scores); i++) {
+for (int i = 0; i < length(scores); i += 1) {
     print("Score " + (i + 1) + " is: " + scores[i]);
 }
 ```
@@ -975,8 +975,8 @@ sequential task during an infinite main loop.
 
 ```
 // Nested Iteration
-for (int x = 1; x <= 3; x++) {
-    for (int y = 1; y <= 2; y++) {
+for (int x = 1; x <= 3; x += 1) {
+  for (int y = 1; y <= 2; y += 1) {
         print("Processing coordinate: (" + x + ", " + y + ")");
     }
 }
