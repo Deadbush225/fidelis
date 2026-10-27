@@ -45,7 +45,6 @@ typedef enum {
 
     // 't' branch: to, then, transition, true
     STATE_T, STATE_TO,
-    STATE_TH, STATE_THE, STATE_THEN,
     STATE_TR, STATE_TRA, STATE_TRAN, STATE_TRANS, STATE_TRANSI, STATE_TRANSIT, STATE_TRANSITI, STATE_TRANSITIO, STATE_TRANSITION,
     STATE_TRU, STATE_TRUE,
 
@@ -796,15 +795,11 @@ Token getNextToken(FILE *source) {
             case STATE_T:
                 switch (c) {
                     CASE_X_BRANCH_TO('o', STATE_TO);
-                    CASE_X_BRANCH_TO('h', STATE_TH);
                     CASE_X_BRANCH_TO('r', STATE_TR);
                     ELSE_CHECK_IF_POSSIBLE_IDENTIFIER();
                 }
                 break;
             case STATE_TO: CONFIRM_KEYWORD_OR_IDENTIFIER(TOKEN_NOISE_WORD); break;
-            case STATE_TH: CAN_WE_BRANCH_OR_IDENTIFIER('e', STATE_THE); break;
-            case STATE_THE: CAN_WE_BRANCH_OR_IDENTIFIER('n', STATE_THEN); break;
-            case STATE_THEN: CONFIRM_KEYWORD_OR_IDENTIFIER(TOKEN_NOISE_WORD); break;
             case STATE_TR:
                 switch (c) {
                     CASE_X_BRANCH_TO('a', STATE_TRA);
