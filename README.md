@@ -211,7 +211,7 @@ make clean
 - `true`, `false`, `null`
 
 ### Noise Words (discarded automatically)
-- `is`, `then`, `do`, `to`
+- `is`, `do`, `to`
 
 These are recognized and filtered by the lexer; they do not appear in the token stream.
 
