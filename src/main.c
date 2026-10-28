@@ -11,7 +11,7 @@
 #endif
 
 int main(int argc, char *argv[]) {
-    printf("━━━━━━━━━━━━━━━━━━━━━ FIDELIS LEXICAL ANALYZER ━━━━━━━━━━━━━━━━━━━━━\n");
+    printf("===================== FIDELIS LEXICAL ANALYZER =====================\n");
     /* ━━━━━━━━━━━━━━━━━━━━━━━ Lexical Preprocessing ━━━━━━━━━━━━━━━━━━━━━━━━ */
 
     const char *filename = (argc > 1) ? argv[1] : "samples/test_features.swift";
@@ -50,7 +50,7 @@ int main(int argc, char *argv[]) {
     printf("Processing File: %s\n", filename);
 
     fprintf(output, "     TOKEN TYPE      |        LEXEME       \n");
-    fprintf(output, "━━━━━━━━━━━━━━━━━━━━━|━━━━━━━━━━━━━━━━━━━━━\n");
+    fprintf(output, "=====================|=====================\n");
 
     Token t;
     do {
