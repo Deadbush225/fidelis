@@ -567,7 +567,7 @@ Token getNextToken(FILE *source) {
                 }
 
                 switch (c) {
-                    case '\'':
+                    case '\'': {
                         // Content sits between the opening quote at index 0 and the
                         // closing quote about to be appended.
                         int contentLen = lexemeIdx - 1;
@@ -578,6 +578,7 @@ Token getNextToken(FILE *source) {
                             ACCEPT_ERROR((contentLen == 0) ? "Empty char literal" : "Char literal too long");
                         }
                         break;
+                    }
                     case EOF:
                     case '\n':
                     case '\r':
