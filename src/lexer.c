@@ -100,7 +100,7 @@ typedef enum {
 
 // Appends one character to the current lexeme. Input longer than the lexeme
 // buffer is truncated rather than written past the end.
-#define LEXEME_CAPACITY ((int)sizeof(token.lexeme))
+#define GET_MAX_LEXEME_LENGTH ((int)sizeof(token.lexeme))
 
 // Safely append one byte to token.lexeme and advance lexemeIdx.
 // Inputs:
@@ -109,12 +109,62 @@ typedef enum {
 // - Writes into token.lexeme when capacity remains
 // - Increments lexemeIdx on successful append
 // - Silently drops bytes after capacity is reached
-#define APPEND_CHAR(ch) \
+#define CONSUME_CHAR(ch) \
     do { \
-        if (lexemeIdx < LEXEME_CAPACITY - 1) { \
+        if (lexemeIdx < GET_MAX_LEXEME_LENGTH - 1) { \
             token.lexeme[lexemeIdx++] = (char)(ch); \
         } \
     } while (0)
+
+// Finalize the currently built lexeme as a specific token type.
+// Side effects:
+// - Null-terminates token.lexeme
+// - Sets token.type
+// - Ends the DFA loop by switching to STATE_DONE
+#define ACCEPT_LEXEME(_token) \
+    do { \
+        token.lexeme[lexemeIdx] = '\0'; \
+        token.type = _token; \
+        state = STATE_DONE; \
+    } while (0)
+
+// Emit a lexer error token with a fixed error message.
+// Side effects:
+// - Copies _str into token.lexeme
+// - Sets token type to TOKEN_ERROR
+// - Ends scanning for the current token
+#define ACCEPT_ERROR(_str) \
+    do { \
+        strcpy(token.lexeme, _str); \
+        token.type = TOKEN_ERROR; \
+        state = STATE_DONE; \
+    } while (0)
+
+// Identifier Recognizer - if it's alphanumeric, keep building an identifier 
+// Otherwise, accept the token.
+#define ACCEPT_TOKEN_OR_IDENTIFIER(_token_type) \
+    if (isalnum(c) || c == '_') { \
+        state = STATE_IN_IDENTIFIER; \
+        CONSUME_CHAR(c); \
+    } else { \
+        ungetc(c, source); \
+        ACCEPT_LEXEME(_token_type); \
+    }
+
+// Switch-case helper for keyword DFA transitions.
+// On match, move to next_state and consume the matched character.
+#define CASE_X_BRANCH_TO(expected_char, next_state) \
+    case expected_char: \
+        state = next_state; \
+        CONSUME_CHAR(c); \
+        break;
+
+// Default switch-case helper for keyword DFA transitions.
+// If no keyword branch matches, resolve to identifier continuation/finalization.
+#define ELSE_CHECK_IF_POSSIBLE_IDENTIFIER() \
+    default: \
+        ACCEPT_TOKEN_OR_IDENTIFIER(TOKEN_IDENTIFIER) \
+        break;
 
 // Transition helper for keyword DFA paths.
 // Behavior:
@@ -122,19 +172,11 @@ typedef enum {
 // - If c continues an identifier, fall back to STATE_IN_IDENTIFIER.
 // - Otherwise, c terminates the token: push it back and emit IDENTIFIER.
 // This avoids keyword text comparisons by deciding via state transitions.
-#define BRANCH_OR_IDENTIFIER(expected_char, next_state) \
+#define CAN_WE_BRANCH_OR_IDENTIFIER(expected_char, next_state) \
     do { \
-        if (c == expected_char) { \
-            state = next_state; \
-            APPEND_CHAR(c); \
-        } else if (isalnum(c) || c == '_') { \
-            state = STATE_IN_IDENTIFIER; \
-            APPEND_CHAR(c); \
-        } else { \
-            ungetc(c, source); \
-            token.lexeme[lexemeIdx] = '\0'; \
-            token.type = TOKEN_IDENTIFIER; \
-            state = STATE_DONE; \
+        switch (c) { \
+            CASE_X_BRANCH_TO(expected_char, next_state); \
+            ELSE_CHECK_IF_POSSIBLE_IDENTIFIER(); \
         } \
     } while(0)
 
@@ -143,17 +185,9 @@ typedef enum {
 // - If c is still identifier content, this is not a standalone keyword,
 //   so continue as STATE_IN_IDENTIFIER.
 // - Otherwise, push c back, terminate lexeme, and emit the keyword token.
-#define YIELD_KEYWORD_OR_IDENTIFIER(token_type) \
+#define CONFIRM_KEYWORD_OR_IDENTIFIER(token_type) \
     do { \
-        if (isalnum(c) || c == '_') { \
-            state = STATE_IN_IDENTIFIER; \
-            APPEND_CHAR(c); \
-        } else { \
-            ungetc(c, source); \
-            token.lexeme[lexemeIdx] = '\0'; \
-            token.type = token_type; \
-            state = STATE_DONE; \
-        } \
+        ACCEPT_TOKEN_OR_IDENTIFIER(token_type) \
     } while(0)
 
 // ============================================================================
@@ -175,251 +209,278 @@ Token getNextToken(FILE *source) {
             // ================================================================
             // START STATE: Initial character dispatch
             // ================================================================
-            case STATE_START:
-                if (c == EOF) {
-                    token.type = TOKEN_EOF;
-                    strcpy(token.lexeme, "EOF");
-                    state = STATE_DONE;
-                }
-                else if (isspace(c)) {
+            case STATE_START: {
+                if (isspace(c)) {
                     continue;
-                }
-                // ---- COMMENTS ----
-                else if (c == '/') {
-                    state = STATE_IN_SLASH;
-                    APPEND_CHAR(c);
-                    lexemeIdx = 0;  // Reset for comment content
-                }
-                // ---- NUMBERS ----
-                else if (isdigit(c)) {
+                } else if (isdigit(c)) { // ---- NUMBERS ----
                     state = STATE_IN_NUMBER;
-                    APPEND_CHAR(c);
-                }
-                // ---- STRINGS ----
-                else if (c == '"') {
-                    state = STATE_IN_STRING;
-                    APPEND_CHAR(c);
-                }
-                // ---- CHARACTERS ----
-                else if (c == '\'') {
-                    state = STATE_IN_CHAR;
-                    APPEND_CHAR(c);
-                }
-                // ---- OPERATORS & MULTI-CHAR ----
-                else if (c == '+') {
-                    state = STATE_IN_PLUS;
-                    APPEND_CHAR(c);
-                }
-                else if (c == '-') {
-                    state = STATE_IN_MINUS;
-                    APPEND_CHAR(c);
-                }
-                else if (c == '*') {
-                    state = STATE_IN_STAR;
-                    APPEND_CHAR(c);
-                }
-                else if (c == '%') {
-                    state = STATE_IN_PERCENT;
-                    APPEND_CHAR(c);
-                }
-                else if (c == '|') {
-                    state = STATE_IN_PIPE;
-                    APPEND_CHAR(c);
-                }
-                else if (c == '&') {
-                    state = STATE_IN_AMPERSAND;
-                    APPEND_CHAR(c);
-                }
-                else if (c == '=') {
-                    state = STATE_IN_EQUALS;
-                    APPEND_CHAR(c);
-                }
-                else if (c == '!') {
-                    state = STATE_IN_NOT;
-                    APPEND_CHAR(c);
-                }
-                else if (c == '<') {
-                    state = STATE_IN_LT;
-                    APPEND_CHAR(c);
-                }
-                else if (c == '>') {
-                    state = STATE_IN_GT;
-                    APPEND_CHAR(c);
-                }
-                else if (c == '?') {
-                    token.type = TOKEN_QUESTION;
-                    APPEND_CHAR(c);
-                    token.lexeme[lexemeIdx] = '\0';
-                    state = STATE_DONE;
-                }
-                else if (c == '^') {
-                    token.type = TOKEN_CARET;
-                    APPEND_CHAR(c);
-                    token.lexeme[lexemeIdx] = '\0';
-                    state = STATE_DONE;
-                }
-                else if (c == '\\') {
-                    token.type = TOKEN_BACKSLASH;
-                    APPEND_CHAR(c);
-                    token.lexeme[lexemeIdx] = '\0';
-                    state = STATE_DONE;
-                }
-                // ---- DELIMITERS ----
-                else if (c == ';') {
-                    token.type = TOKEN_SEMICOLON;
-                    APPEND_CHAR(c);
-                    token.lexeme[lexemeIdx] = '\0';
-                    state = STATE_DONE;
-                }
-                else if (c == ',') {
-                    token.type = TOKEN_COMMA;
-                    APPEND_CHAR(c);
-                    token.lexeme[lexemeIdx] = '\0';
-                    state = STATE_DONE;
-                }
-                else if (c == ':') {
-                    token.type = TOKEN_COLON;
-                    APPEND_CHAR(c);
-                    token.lexeme[lexemeIdx] = '\0';
-                    state = STATE_DONE;
-                }
-                // ---- BRACKETS ----
-                else if (c == '(') {
-                    token.type = TOKEN_LPAREN;
-                    APPEND_CHAR(c);
-                    token.lexeme[lexemeIdx] = '\0';
-                    state = STATE_DONE;
-                }
-                else if (c == ')') {
-                    token.type = TOKEN_RPAREN;
-                    APPEND_CHAR(c);
-                    token.lexeme[lexemeIdx] = '\0';
-                    state = STATE_DONE;
-                }
-                else if (c == '{') {
-                    token.type = TOKEN_LBRACE;
-                    APPEND_CHAR(c);
-                    token.lexeme[lexemeIdx] = '\0';
-                    state = STATE_DONE;
-                }
-                else if (c == '}') {
-                    token.type = TOKEN_RBRACE;
-                    APPEND_CHAR(c);
-                    token.lexeme[lexemeIdx] = '\0';
-                    state = STATE_DONE;
-                }
-                else if (c == '[') {
-                    token.type = TOKEN_LBRACKET;
-                    APPEND_CHAR(c);
-                    token.lexeme[lexemeIdx] = '\0';
-                    state = STATE_DONE;
-                }
-                else if (c == ']') {
-                    token.type = TOKEN_RBRACKET;
-                    APPEND_CHAR(c);
-                    token.lexeme[lexemeIdx] = '\0';
-                    state = STATE_DONE;
-                }
-                // ---- KEYWORDS (letter entry points) ----
-                else if (c == 'i') { state = STATE_I; APPEND_CHAR(c); }
-                else if (c == 'd') { state = STATE_D; APPEND_CHAR(c); }
-                else if (c == 't') { state = STATE_T; APPEND_CHAR(c); }
-                else if (c == 's') { state = STATE_S; APPEND_CHAR(c); }
-                else if (c == 'e') { state = STATE_E; APPEND_CHAR(c); }
-                else if (c == 'b') { state = STATE_B; APPEND_CHAR(c); }
-                else if (c == 'c') { state = STATE_C; APPEND_CHAR(c); }
-                else if (c == 'f') { state = STATE_F; APPEND_CHAR(c); }
-                else if (c == 'n') { state = STATE_N; APPEND_CHAR(c); }
-                else if (c == 'r') { state = STATE_R; APPEND_CHAR(c); }
-                else if (c == 'l') { state = STATE_L; APPEND_CHAR(c); }
-                else if (c == 'm') { state = STATE_M; APPEND_CHAR(c); }
-                else if (c == 'p') { state = STATE_P; APPEND_CHAR(c); }
-                else if (c == 'q') { state = STATE_Q; APPEND_CHAR(c); }
-                else if (isalpha(c) || c == '_') {
-                    state = STATE_IN_IDENTIFIER;
-                    APPEND_CHAR(c);
-                }
-                else {
-                    token.type = TOKEN_ERROR;
-                    APPEND_CHAR(c);
-                    token.lexeme[lexemeIdx] = '\0';
-                    state = STATE_DONE;
-                }
+                    CONSUME_CHAR(c);
+                } else {
+                    switch (c) {
+                        case EOF:
+                            ACCEPT_LEXEME(TOKEN_EOF);
+                            break;
+                        case ' ':
+                        case '\t':
+                        case '\n':
+                            continue;
+                            break;
+                        // ---- COMMENTS ----
+                        case '/':
+                            state = STATE_IN_SLASH;
+                            CONSUME_CHAR(c);
+                            lexemeIdx = 0;  // Reset for comment content
+                            break;
+                        // ---- STRINGS ----
+                        case '"':
+                            state = STATE_IN_STRING;
+                            CONSUME_CHAR(c);
+                            break;
+                        // ---- CHARACTERS ----
+                        case '\'':
+                            state = STATE_IN_CHAR;
+                            CONSUME_CHAR(c);
+                            break;
+                        // ---- OPERATORS & MULTI-CHAR ----
+                        case '+':
+                            state = STATE_IN_PLUS;
+                            CONSUME_CHAR(c);
+                            break;
+                        case '-':
+                            state = STATE_IN_MINUS;
+                            CONSUME_CHAR(c);
+                            break;
+                        case '*':
+                            state = STATE_IN_STAR;
+                            CONSUME_CHAR(c);
+                            break;
+                        case '%':
+                            state = STATE_IN_PERCENT;
+                            CONSUME_CHAR(c);
+                            break;
+                        case '|':
+                            state = STATE_IN_PIPE;
+                            CONSUME_CHAR(c);
+                            break;
+                        case '&':
+                            state = STATE_IN_AMPERSAND;
+                            CONSUME_CHAR(c);
+                            break;
+                        case '=':
+                            state = STATE_IN_EQUALS;
+                            CONSUME_CHAR(c);
+                            break;
+                        case '!':
+                            state = STATE_IN_NOT;
+                            CONSUME_CHAR(c);
+                            break;
+                        case '<':
+                            state = STATE_IN_LT;
+                            CONSUME_CHAR(c);
+                            break;
+                        case '>':
+                            state = STATE_IN_GT;
+                            CONSUME_CHAR(c);
+                            break;
+                        case '?':
+                            CONSUME_CHAR(c);
+                            ACCEPT_LEXEME(TOKEN_QUESTION);
+                            break;
+                        case '^':
+                            CONSUME_CHAR(c);
+                            ACCEPT_LEXEME(TOKEN_CARET);
+                            break;
+                        case '\\':
+                            CONSUME_CHAR(c);
+                            ACCEPT_LEXEME(TOKEN_BACKSLASH);
+                            break;
+                        // ---- DELIMITERS ----
+                        case ';':
+                            CONSUME_CHAR(c);
+                            ACCEPT_LEXEME(TOKEN_SEMICOLON);
+                            break;
+                        case ',':
+                            CONSUME_CHAR(c);
+                            ACCEPT_LEXEME(TOKEN_COMMA);
+                            break;
+                        case ':': 
+                            CONSUME_CHAR(c);
+                            ACCEPT_LEXEME(TOKEN_COLON);
+                            break;
+                        // ---- BRACKETS ----
+                        case '(':
+                            CONSUME_CHAR(c);
+                            ACCEPT_LEXEME(TOKEN_LPAREN);
+                            break;
+                        case ')':
+                            CONSUME_CHAR(c);
+                            ACCEPT_LEXEME(TOKEN_RPAREN);
+                            break;
+                        case '{':
+                            CONSUME_CHAR(c);
+                            ACCEPT_LEXEME(TOKEN_LBRACE);
+                            break;
+                        case '}':
+                            CONSUME_CHAR(c);
+                            ACCEPT_LEXEME(TOKEN_RBRACE);
+                            break;
+                        case '[':
+                            CONSUME_CHAR(c);
+                            ACCEPT_LEXEME(TOKEN_LBRACKET);
+                            break;
+                        case ']':
+                            CONSUME_CHAR(c);
+                            ACCEPT_LEXEME(TOKEN_RBRACKET);
+                            break;
+                        // ---- KEYWORDS (letter entry points) ----
+                        case 'i':
+                            state = STATE_I;
+                            CONSUME_CHAR(c);
+                            break;
+                        case 'd':
+                            state = STATE_D;
+                            CONSUME_CHAR(c);
+                            break;
+                        case 't':
+                            state = STATE_T;
+                            CONSUME_CHAR(c);
+                            break;
+                        case 's':
+                            state = STATE_S;
+                            CONSUME_CHAR(c);
+                            break;
+                        case 'e':
+                            state = STATE_E;
+                            CONSUME_CHAR(c);
+                            break;
+                        case 'b':
+                            state = STATE_B;
+                            CONSUME_CHAR(c);
+                            break;
+                        case 'c':
+                            state = STATE_C;
+                            CONSUME_CHAR(c);
+                            break;
+                        case 'f':
+                            state = STATE_F;
+                            CONSUME_CHAR(c);
+                            break;
+                        case 'n':
+                            state = STATE_N;
+                            CONSUME_CHAR(c);
+                            break;
+                        case 'r':
+                            state = STATE_R;
+                            CONSUME_CHAR(c);
+                            break;
+                        case 'l':
+                            state = STATE_L;
+                            CONSUME_CHAR(c);
+                            break;
+                        case 'm':
+                            state = STATE_M;
+                            CONSUME_CHAR(c);
+                            break;
+                        case 'p':
+                            state = STATE_P;
+                            CONSUME_CHAR(c);
+                            break;
+                        case 'q':
+                            state = STATE_Q;
+                            CONSUME_CHAR(c);
+                            break;
+                        
+                        default:
+                            if (isalpha(c) || c == '_') {
+                                state = STATE_IN_IDENTIFIER;
+                                CONSUME_CHAR(c);
+                            } else {
+                                CONSUME_CHAR(c);
+                                ACCEPT_LEXEME(TOKEN_ERROR);
+                            }
+                        }
+                    }
                 break;
+                }
 
             // ================================================================
             // COMMENTS
             // ================================================================
             case STATE_IN_SLASH:
-                if (c == '/') {
-                    state = STATE_IN_LINE_COMMENT;
-                    token.lexeme[0] = '/';
-                    token.lexeme[1] = '/';
-                    lexemeIdx = 2;
-                } else if (c == '*') {
-                    state = STATE_IN_BLOCK_COMMENT;
-                    token.lexeme[0] = '/';
-                    token.lexeme[1] = '*';
-                    lexemeIdx = 2;
-                } else if (c == '=') {
-                    // lexemeIdx was reset to 0 for comment content, so rebuild
-                    // the whole operator instead of appending to it.
-                    token.type = TOKEN_SLASH_ASSIGN;
-                    token.lexeme[0] = '/';
-                    token.lexeme[1] = '=';
-                    token.lexeme[2] = '\0';
-                    lexemeIdx = 0;
-                    state = STATE_DONE;
-                } else {
-                    ungetc(c, source);
-                    token.type = TOKEN_SLASH;
-                    token.lexeme[1] = '\0';
-                    state = STATE_DONE;
+                switch (c) {
+                    case '/':
+                        state = STATE_IN_LINE_COMMENT;
+                        token.lexeme[0] = '/';
+                        token.lexeme[1] = '/';
+                        lexemeIdx = 2;
+                        break;
+                    case '*':
+                        state = STATE_IN_BLOCK_COMMENT;
+                        token.lexeme[0] = '/';
+                        token.lexeme[1] = '*';
+                        lexemeIdx = 2;
+                        break;
+                    case '=':
+                        // lexemeIdx was reset to 0 for comment content, so rebuild
+                        // the whole operator instead of appending to it.
+                        token.type = TOKEN_SLASH_ASSIGN;
+                        token.lexeme[0] = '/';
+                        token.lexeme[1] = '=';
+                        token.lexeme[2] = '\0';
+                        lexemeIdx = 0;
+                        state = STATE_DONE;
+                        break;
+                    default:
+                        ungetc(c, source);
+                        token.type = TOKEN_SLASH;
+                        token.lexeme[1] = '\0';
+                        state = STATE_DONE;
                 }
                 break;
 
             case STATE_IN_LINE_COMMENT:
-                if (c == '\n' || c == EOF) {
-                    token.lexeme[lexemeIdx] = '\0';
-                    token.type = TOKEN_LINE_COMMENT;
-                    ungetc(c, source);
-                    state = STATE_DONE;
-                } else {
-                    APPEND_CHAR(c);
+                switch (c) {
+                    case EOF:
+                    case '\n':
+                        ungetc(c, source);
+                        ACCEPT_LEXEME(TOKEN_LINE_COMMENT);
+                        break;
+                    default:
+                        CONSUME_CHAR(c);
                 }
                 break;
 
             case STATE_IN_BLOCK_COMMENT:
-                if (c == '*') {
-                    state = STATE_IN_BLOCK_COMMENT_STAR;
-                    APPEND_CHAR(c);
-                } else if (c == EOF) {
-                    token.type = TOKEN_ERROR;
-                    token.lexeme[lexemeIdx] = '\0';
-                    strcpy(token.lexeme, "Unterminated block comment");
-                    state = STATE_DONE;
-                } else {
-                    APPEND_CHAR(c);
+                switch (c) {
+                    case '*':
+                        state = STATE_IN_BLOCK_COMMENT_STAR;
+                        CONSUME_CHAR(c);
+                        break;
+                    case EOF:
+                        ACCEPT_LEXEME(TOKEN_ERROR); // Unterminated block comment
+                        break;
+                    default:
+                        CONSUME_CHAR(c);
                 }
                 break;
 
             case STATE_IN_BLOCK_COMMENT_STAR:
-                if (c == '/') {
-                    APPEND_CHAR(c);
-                    token.lexeme[lexemeIdx] = '\0';
-                    token.type = TOKEN_BLOCK_COMMENT;
-                    state = STATE_DONE;
-                } else if (c == '*') {
-                    state = STATE_IN_BLOCK_COMMENT_STAR;
-                    APPEND_CHAR(c);
-                } else if (c == EOF) {
-                    token.type = TOKEN_ERROR;
-                    token.lexeme[lexemeIdx] = '\0';
-                    strcpy(token.lexeme, "Unterminated block comment");
-                    state = STATE_DONE;
-                } else {
-                    state = STATE_IN_BLOCK_COMMENT;
-                    APPEND_CHAR(c);
+                switch (c) {
+                    case '/':
+                        CONSUME_CHAR(c);
+                        ACCEPT_LEXEME(TOKEN_BLOCK_COMMENT);
+                        break;
+                    case '*':
+                        state = STATE_IN_BLOCK_COMMENT_STAR;
+                        CONSUME_CHAR(c);
+                        break;
+                    case EOF:
+                        strcpy(token.lexeme, "Unterminated block comment");
+                        ACCEPT_LEXEME(TOKEN_ERROR);
+                        break;
+                    default:
+                        state = STATE_IN_BLOCK_COMMENT;
+                        CONSUME_CHAR(c);
                 }
                 break;
 
@@ -428,48 +489,40 @@ Token getNextToken(FILE *source) {
             // ================================================================
             case STATE_IN_NUMBER:
                 if (isdigit(c)) {
-                    APPEND_CHAR(c);
+                    CONSUME_CHAR(c);
                 } else if (c == '.') {
                     state = STATE_IN_FLOAT;
-                    APPEND_CHAR(c);
+                    CONSUME_CHAR(c);
                 } else if (isalpha(c) || c == '_') {
-                    APPEND_CHAR(c);
+                    CONSUME_CHAR(c);
                     while ((c = fgetc(source)) != EOF && (isalnum(c) || c == '_')) {
                         if (lexemeIdx < (int)sizeof(token.lexeme) - 1) {
-                            APPEND_CHAR(c);
+                            CONSUME_CHAR(c);
                         }
                     }
                     if (c != EOF) ungetc(c, source);
-                    token.lexeme[lexemeIdx] = '\0';
-                    token.type = TOKEN_ERROR;
-                    state = STATE_DONE;
+                    ACCEPT_LEXEME(TOKEN_ERROR);
                 } else {
                     ungetc(c, source);
-                    token.lexeme[lexemeIdx] = '\0';
-                    token.type = TOKEN_INT_LITERAL;
-                    state = STATE_DONE;
+                    ACCEPT_LEXEME(TOKEN_INT_LITERAL);
                 }
                 break;
 
             case STATE_IN_FLOAT:
                 if (isdigit(c)) {
-                    APPEND_CHAR(c);
+                    CONSUME_CHAR(c);
                 } else if (isalpha(c) || c == '_') {
-                    APPEND_CHAR(c);
+                    CONSUME_CHAR(c);
                     while ((c = fgetc(source)) != EOF && (isalnum(c) || c == '_')) {
                         if (lexemeIdx < (int)sizeof(token.lexeme) - 1) {
-                            APPEND_CHAR(c);
+                            CONSUME_CHAR(c);
                         }
                     }
                     if (c != EOF) ungetc(c, source);
-                    token.lexeme[lexemeIdx] = '\0';
-                    token.type = TOKEN_ERROR;
-                    state = STATE_DONE;
+                    ACCEPT_LEXEME(TOKEN_ERROR);
                 } else {
                     ungetc(c, source);
-                    token.lexeme[lexemeIdx] = '\0';
-                    token.type = TOKEN_FLOAT_LITERAL;
-                    state = STATE_DONE;
+                    ACCEPT_LEXEME(TOKEN_FLOAT_LITERAL);
                 }
                 break;
 
@@ -481,22 +534,26 @@ Token getNextToken(FILE *source) {
                     // Keep the backslash and the escaped byte in the lexeme so
                     // the token text matches the source.
                     escaped = 0;
-                    APPEND_CHAR(c);
-                } else if (c == '\\') {
-                    escaped = 1;
-                    APPEND_CHAR(c);
-                } else if (c == '"') {
-                    APPEND_CHAR(c);
-                    token.lexeme[lexemeIdx] = '\0';
-                    token.type = TOKEN_STRING_LITERAL;
-                    state = STATE_DONE;
-                } else if (c == EOF || c == '\n' || c == '\r') {
-                    token.type = TOKEN_ERROR;
-                    token.lexeme[lexemeIdx] = '\0';
-                    strcpy(token.lexeme, "Unterminated string");
-                    state = STATE_DONE;
-                } else {
-                    APPEND_CHAR(c);
+                    CONSUME_CHAR(c);
+                    break;
+                }
+                
+                switch (c) {
+                    case '\\':
+                        escaped = 1;
+                        CONSUME_CHAR(c);
+                        break;
+                    case '"':
+                        CONSUME_CHAR(c);
+                        ACCEPT_LEXEME(TOKEN_STRING_LITERAL);
+                        break;
+                    case EOF:
+                    case '\n':
+                    case '\r':
+                        ACCEPT_LEXEME(TOKEN_ERROR);
+                        break;
+                    default:
+                        CONSUME_CHAR(c);
                 }
                 break;
 
@@ -504,30 +561,31 @@ Token getNextToken(FILE *source) {
             // CHARACTER PARSING
             // ================================================================
             case STATE_IN_CHAR:
-                if (c == '\'') {
-                    // Content sits between the opening quote at index 0 and the
-                    // closing quote about to be appended.
-                    int contentLen = lexemeIdx - 1;
-                    if (contentLen == 1 || (contentLen == 2 && token.lexeme[1] == '\\')) {
-                        APPEND_CHAR(c);
-                        token.lexeme[lexemeIdx] = '\0';
-                        token.type = TOKEN_CHAR_LITERAL;
-                    } else {
-                        token.type = TOKEN_ERROR;
-                        strcpy(token.lexeme, (contentLen == 0) ? "Empty char literal"
-                                                               : "Char literal too long");
+                if (lexemeIdx - 1 >= 2) {
+                    ACCEPT_ERROR("Char literal too long");
+                    break;
+                }
+
+                switch (c) {
+                    case '\'': {
+                        // Content sits between the opening quote at index 0 and the
+                        // closing quote about to be appended.
+                        int contentLen = lexemeIdx - 1;
+                        if (contentLen == 1 || (contentLen == 2 && token.lexeme[1] == '\\')) {
+                            CONSUME_CHAR(c);
+                            ACCEPT_LEXEME(TOKEN_CHAR_LITERAL);
+                        } else {
+                            ACCEPT_ERROR((contentLen == 0) ? "Empty char literal" : "Char literal too long");
+                        }
+                        break;
                     }
-                    state = STATE_DONE;
-                } else if (c == EOF || c == '\n' || c == '\r') {
-                    token.type = TOKEN_ERROR;
-                    strcpy(token.lexeme, "Unterminated char");
-                    state = STATE_DONE;
-                } else if (lexemeIdx - 1 >= 2) {
-                    token.type = TOKEN_ERROR;
-                    strcpy(token.lexeme, "Char literal too long");
-                    state = STATE_DONE;
-                } else {
-                    APPEND_CHAR(c);
+                    case EOF:
+                    case '\n':
+                    case '\r':
+                        ACCEPT_ERROR("Unterminated char");
+                        break;
+                    default: 
+                        CONSUME_CHAR(c);
                 }
                 break;
 
@@ -535,152 +593,136 @@ Token getNextToken(FILE *source) {
             // OPERATOR BRANCHING
             // ================================================================
             case STATE_IN_PLUS:
-                if (c == '=') {
-                    token.type = TOKEN_PLUS_ASSIGN;
-                    APPEND_CHAR(c);
-                    token.lexeme[lexemeIdx] = '\0';
-                    state = STATE_DONE;
-                } else {
-                    ungetc(c, source);
-                    token.type = TOKEN_PLUS;
-                    token.lexeme[lexemeIdx] = '\0';
-                    state = STATE_DONE;
+                switch (c) {
+                    case '=':
+                        CONSUME_CHAR(c);
+                        ACCEPT_LEXEME(TOKEN_PLUS_ASSIGN);
+                        break;
+                    default:
+                        ungetc(c, source);
+                        ACCEPT_LEXEME(TOKEN_PLUS);
+                        break;
                 }
                 break;
 
             case STATE_IN_MINUS:
-                if (c == '>') {
-                    token.type = TOKEN_ARROW;
-                    APPEND_CHAR(c);
-                    token.lexeme[lexemeIdx] = '\0';
-                    state = STATE_DONE;
-                } else if (c == '=') {
-                    token.type = TOKEN_MINUS_ASSIGN;
-                    APPEND_CHAR(c);
-                    token.lexeme[lexemeIdx] = '\0';
-                    state = STATE_DONE;
-                } else {
-                    ungetc(c, source);
-                    token.type = TOKEN_MINUS;
-                    token.lexeme[lexemeIdx] = '\0';
-                    state = STATE_DONE;
+                switch (c) {
+                    case '>':
+                        CONSUME_CHAR(c);
+                        ACCEPT_LEXEME(TOKEN_ARROW);
+                        break;
+                    case '=':
+                        CONSUME_CHAR(c);
+                        ACCEPT_LEXEME(TOKEN_MINUS_ASSIGN);
+                        break;
+                    default:
+                        ungetc(c, source);
+                        ACCEPT_LEXEME(TOKEN_MINUS);
                 }
                 break;
 
             case STATE_IN_STAR:
-                if (c == '=') {
-                    token.type = TOKEN_STAR_ASSIGN;
-                    APPEND_CHAR(c);
-                    token.lexeme[lexemeIdx] = '\0';
-                    state = STATE_DONE;
-                } else {
-                    ungetc(c, source);
-                    token.type = TOKEN_STAR;
-                    token.lexeme[lexemeIdx] = '\0';
-                    state = STATE_DONE;
+                switch (c) {
+                    case '=':
+                        CONSUME_CHAR(c);
+                        ACCEPT_LEXEME(TOKEN_STAR_ASSIGN);
+                        break;
+                    default:
+                        ungetc(c, source);
+                        ACCEPT_LEXEME(TOKEN_STAR);
                 }
                 break;
 
             case STATE_IN_PERCENT:
-                if (c == '=') {
-                    token.type = TOKEN_PERCENT_ASSIGN;
-                    APPEND_CHAR(c);
-                    token.lexeme[lexemeIdx] = '\0';
-                    state = STATE_DONE;
-                } else {
-                    ungetc(c, source);
-                    token.type = TOKEN_PERCENT;
-                    token.lexeme[lexemeIdx] = '\0';
-                    state = STATE_DONE;
+                switch (c) {
+                    case '=':
+                        CONSUME_CHAR(c);
+                        ACCEPT_LEXEME(TOKEN_PERCENT_ASSIGN);
+                        break;
+                    default:
+                        ungetc(c, source);
+                        ACCEPT_LEXEME(TOKEN_PERCENT);
                 }
                 break;
 
             case STATE_IN_PIPE:
-                if (c == '>') {
-                    token.type = TOKEN_PIPELINE;
-                    APPEND_CHAR(c);
-                    token.lexeme[lexemeIdx] = '\0';
-                    state = STATE_DONE;
-                } else if (c == '|') {
-                    token.type = TOKEN_OR;
-                    APPEND_CHAR(c);
-                    token.lexeme[lexemeIdx] = '\0';
-                    state = STATE_DONE;
-                } else {
-                    ungetc(c, source);
-                    token.type = TOKEN_ERROR;
-                    token.lexeme[lexemeIdx] = '\0';
-                    state = STATE_DONE;
+                switch (c) {
+                    case '>':
+                        CONSUME_CHAR(c);
+                        ACCEPT_LEXEME(TOKEN_PIPELINE);
+                        break;
+                    case '|':
+                        CONSUME_CHAR(c);
+                        ACCEPT_LEXEME(TOKEN_OR);
+                        break;
+                    default:
+                        ungetc(c, source);
+                        ACCEPT_LEXEME(TOKEN_ERROR);
                 }
                 break;
 
             case STATE_IN_AMPERSAND:
-                if (c == '&') {
-                    token.type = TOKEN_AND;
-                    APPEND_CHAR(c);
-                    token.lexeme[lexemeIdx] = '\0';
-                    state = STATE_DONE;
-                } else {
-                    ungetc(c, source);
-                    token.type = TOKEN_ERROR;
-                    token.lexeme[lexemeIdx] = '\0';
-                    state = STATE_DONE;
+                switch (c) {
+                    case '&':
+                        CONSUME_CHAR(c);
+                        ACCEPT_LEXEME(TOKEN_AND);
+                        break;
+                    default:
+                        ungetc(c, source);
+                        ACCEPT_LEXEME(TOKEN_ERROR);
+                        break;
                 }
                 break;
 
             case STATE_IN_EQUALS:
-                if (c == '=') {
-                    token.type = TOKEN_EQ;
-                    APPEND_CHAR(c);
-                    token.lexeme[lexemeIdx] = '\0';
-                    state = STATE_DONE;
-                } else {
-                    ungetc(c, source);
-                    token.type = TOKEN_ASSIGN;
-                    token.lexeme[lexemeIdx] = '\0';
-                    state = STATE_DONE;
+                switch (c) {
+                    case '=':
+                        CONSUME_CHAR(c);
+                        ACCEPT_LEXEME(TOKEN_EQ);
+                        break;
+                    default:
+                        ungetc(c, source);
+                        ACCEPT_LEXEME(TOKEN_ASSIGN);
+                        break;
                 }
                 break;
 
             case STATE_IN_NOT:
-                if (c == '=') {
-                    token.type = TOKEN_NE;
-                    APPEND_CHAR(c);
-                    token.lexeme[lexemeIdx] = '\0';
-                    state = STATE_DONE;
-                } else {
-                    ungetc(c, source);
-                    token.type = TOKEN_NOT;
-                    token.lexeme[lexemeIdx] = '\0';
-                    state = STATE_DONE;
+                switch (c) {
+                    case '=':
+                        CONSUME_CHAR(c);
+                        ACCEPT_LEXEME(TOKEN_NE);
+                        break;
+                    default:
+                        ungetc(c, source);
+                        ACCEPT_LEXEME(TOKEN_NOT);
+                        break;
                 }
                 break;
 
             case STATE_IN_LT:
-                if (c == '=') {
-                    token.type = TOKEN_LE;
-                    APPEND_CHAR(c);
-                    token.lexeme[lexemeIdx] = '\0';
-                    state = STATE_DONE;
-                } else {
-                    ungetc(c, source);
-                    token.type = TOKEN_LT;
-                    token.lexeme[lexemeIdx] = '\0';
-                    state = STATE_DONE;
+                switch (c) {
+                    case '=':
+                        CONSUME_CHAR(c);
+                        ACCEPT_LEXEME(TOKEN_LE);
+                        break;
+                    default:
+                        ungetc(c, source);
+                        ACCEPT_LEXEME(TOKEN_LT);
+                        break;
                 }
                 break;
 
             case STATE_IN_GT:
-                if (c == '=') {
-                    token.type = TOKEN_GE;
-                    APPEND_CHAR(c);
-                    token.lexeme[lexemeIdx] = '\0';
-                    state = STATE_DONE;
-                } else {
-                    ungetc(c, source);
-                    token.type = TOKEN_GT;
-                    token.lexeme[lexemeIdx] = '\0';
-                    state = STATE_DONE;
+                switch (c) {
+                    case '=':
+                        CONSUME_CHAR(c);
+                        ACCEPT_LEXEME(TOKEN_GE);
+                        break;
+                    default:
+                        ungetc(c, source);
+                        ACCEPT_LEXEME(TOKEN_GT);
+                        break;
                 }
                 break;
 
@@ -690,201 +732,208 @@ Token getNextToken(FILE *source) {
 
             // 'i' BRANCH: is, int, if
             case STATE_I:
-                if (c == 's') { state = STATE_IS; APPEND_CHAR(c); }
-                else if (c == 'n') { state = STATE_IN_KW; APPEND_CHAR(c); }
-                else if (c == 'f') { state = STATE_IF; APPEND_CHAR(c); }
-                else if (isalnum(c) || c == '_') { state = STATE_IN_IDENTIFIER; APPEND_CHAR(c); }
-                else { ungetc(c, source); token.lexeme[lexemeIdx] = '\0'; token.type = TOKEN_IDENTIFIER; state = STATE_DONE; }
+                switch (c) {
+                    CASE_X_BRANCH_TO('s', STATE_IS);
+                    CASE_X_BRANCH_TO('n', STATE_IN_KW);
+                    CASE_X_BRANCH_TO('f', STATE_IF);
+                    ELSE_CHECK_IF_POSSIBLE_IDENTIFIER();
+                }
                 break;
-            case STATE_IS: YIELD_KEYWORD_OR_IDENTIFIER(TOKEN_NOISE_WORD); break;
-            case STATE_IN_KW: BRANCH_OR_IDENTIFIER('t', STATE_INT); break;
-            case STATE_INT: YIELD_KEYWORD_OR_IDENTIFIER(TOKEN_INT); break;
-            case STATE_IF: YIELD_KEYWORD_OR_IDENTIFIER(TOKEN_IF); break;
+            case STATE_IS: CONFIRM_KEYWORD_OR_IDENTIFIER(TOKEN_NOISE_WORD); break;
+            case STATE_IN_KW: CAN_WE_BRANCH_OR_IDENTIFIER('t', STATE_INT); break;
+            case STATE_INT: CONFIRM_KEYWORD_OR_IDENTIFIER(TOKEN_INT); break;
+            case STATE_IF: CONFIRM_KEYWORD_OR_IDENTIFIER(TOKEN_IF); break;
 
             // 'd' BRANCH: do
-            case STATE_D: BRANCH_OR_IDENTIFIER('o', STATE_DO); break;
-            case STATE_DO: YIELD_KEYWORD_OR_IDENTIFIER(TOKEN_NOISE_WORD); break;
+            case STATE_D: CAN_WE_BRANCH_OR_IDENTIFIER('o', STATE_DO); break;
+            case STATE_DO: CONFIRM_KEYWORD_OR_IDENTIFIER(TOKEN_NOISE_WORD); break;
 
             // 's' BRANCH: state, string, sleep
             case STATE_S:
-                if (c == 't') { state = STATE_ST; APPEND_CHAR(c); }
-                else if (c == 'l') { state = STATE_SL; APPEND_CHAR(c); }
-                else if (isalnum(c) || c == '_') { state = STATE_IN_IDENTIFIER; APPEND_CHAR(c); }
-                else { ungetc(c, source); token.lexeme[lexemeIdx] = '\0'; token.type = TOKEN_IDENTIFIER; state = STATE_DONE; }
+                switch (c) {
+                    CASE_X_BRANCH_TO('t', STATE_ST);
+                    CASE_X_BRANCH_TO('l', STATE_SL);
+                    ELSE_CHECK_IF_POSSIBLE_IDENTIFIER();
+                }
                 break;
             case STATE_ST:
-                if (c == 'a') { state = STATE_STA; APPEND_CHAR(c); }
-                else if (c == 'r') { state = STATE_STR; APPEND_CHAR(c); }
-                else if (isalnum(c) || c == '_') { state = STATE_IN_IDENTIFIER; APPEND_CHAR(c); }
-                else { ungetc(c, source); token.lexeme[lexemeIdx] = '\0'; token.type = TOKEN_IDENTIFIER; state = STATE_DONE; }
+                switch (c) {
+                    CASE_X_BRANCH_TO('a', STATE_STA);
+                    CASE_X_BRANCH_TO('r', STATE_STR);
+                    ELSE_CHECK_IF_POSSIBLE_IDENTIFIER();
+                }
                 break;
-            case STATE_STA: BRANCH_OR_IDENTIFIER('t', STATE_STAT); break;
-            case STATE_STAT:
-                if (c == 'e') { state = STATE_STATE_KW; APPEND_CHAR(c); }
-                else if (isalnum(c) || c == '_') { state = STATE_IN_IDENTIFIER; APPEND_CHAR(c); }
-                else { ungetc(c, source); token.lexeme[lexemeIdx] = '\0'; token.type = TOKEN_IDENTIFIER; state = STATE_DONE; }
-                break;
-            case STATE_STATE_KW: YIELD_KEYWORD_OR_IDENTIFIER(TOKEN_STATE); break;
-            case STATE_STR: BRANCH_OR_IDENTIFIER('i', STATE_STRI); break;
-            case STATE_STRI: BRANCH_OR_IDENTIFIER('n', STATE_STRIN); break;
-            case STATE_STRIN: BRANCH_OR_IDENTIFIER('g', STATE_STRING); break;
-            case STATE_STRING: YIELD_KEYWORD_OR_IDENTIFIER(TOKEN_STRING); break;
-            case STATE_SL: BRANCH_OR_IDENTIFIER('e', STATE_SLE); break;
-            case STATE_SLE: BRANCH_OR_IDENTIFIER('e', STATE_SLEE); break;
-            case STATE_SLEE: BRANCH_OR_IDENTIFIER('p', STATE_SLEEP); break;
-            case STATE_SLEEP: YIELD_KEYWORD_OR_IDENTIFIER(TOKEN_SLEEP); break;
+            case STATE_STA: CAN_WE_BRANCH_OR_IDENTIFIER('t', STATE_STAT); break;
+            case STATE_STAT: CAN_WE_BRANCH_OR_IDENTIFIER('e', STATE_STATE_KW); break;
+            case STATE_STATE_KW: CONFIRM_KEYWORD_OR_IDENTIFIER(TOKEN_STATE); break;
+            case STATE_STR: CAN_WE_BRANCH_OR_IDENTIFIER('i', STATE_STRI); break;
+            case STATE_STRI: CAN_WE_BRANCH_OR_IDENTIFIER('n', STATE_STRIN); break;
+            case STATE_STRIN: CAN_WE_BRANCH_OR_IDENTIFIER('g', STATE_STRING); break;
+            case STATE_STRING: CONFIRM_KEYWORD_OR_IDENTIFIER(TOKEN_STRING); break;
+            case STATE_SL: CAN_WE_BRANCH_OR_IDENTIFIER('e', STATE_SLE); break;
+            case STATE_SLE: CAN_WE_BRANCH_OR_IDENTIFIER('e', STATE_SLEE); break;
+            case STATE_SLEE: CAN_WE_BRANCH_OR_IDENTIFIER('p', STATE_SLEEP); break;
+            case STATE_SLEEP: CONFIRM_KEYWORD_OR_IDENTIFIER(TOKEN_SLEEP); break;
 
             // 'e' BRANCH: ensure, else
             case STATE_E:
-                if (c == 'n') { state = STATE_EN; APPEND_CHAR(c); }
-                else if (c == 'l') { state = STATE_EL; APPEND_CHAR(c); }
-                else if (isalnum(c) || c == '_') { state = STATE_IN_IDENTIFIER; APPEND_CHAR(c); }
-                else { ungetc(c, source); token.lexeme[lexemeIdx] = '\0'; token.type = TOKEN_IDENTIFIER; state = STATE_DONE; }
+                switch (c) {
+                    CASE_X_BRANCH_TO('n', STATE_EN);
+                    CASE_X_BRANCH_TO('l', STATE_EL);
+                    ELSE_CHECK_IF_POSSIBLE_IDENTIFIER();
+                }
                 break;
-            case STATE_EN: BRANCH_OR_IDENTIFIER('s', STATE_ENS); break;
-            case STATE_ENS: BRANCH_OR_IDENTIFIER('u', STATE_ENSU); break;
-            case STATE_ENSU: BRANCH_OR_IDENTIFIER('r', STATE_ENSUR); break;
-            case STATE_ENSUR: BRANCH_OR_IDENTIFIER('e', STATE_ENSURE); break;
-            case STATE_ENSURE: YIELD_KEYWORD_OR_IDENTIFIER(TOKEN_ENSURE); break;
-            case STATE_EL: BRANCH_OR_IDENTIFIER('s', STATE_ELS); break;
-            case STATE_ELS: BRANCH_OR_IDENTIFIER('e', STATE_ELSE); break;
-            case STATE_ELSE: YIELD_KEYWORD_OR_IDENTIFIER(TOKEN_ELSE); break;
+            case STATE_EN: CAN_WE_BRANCH_OR_IDENTIFIER('s', STATE_ENS); break;
+            case STATE_ENS: CAN_WE_BRANCH_OR_IDENTIFIER('u', STATE_ENSU); break;
+            case STATE_ENSU: CAN_WE_BRANCH_OR_IDENTIFIER('r', STATE_ENSUR); break;
+            case STATE_ENSUR: CAN_WE_BRANCH_OR_IDENTIFIER('e', STATE_ENSURE); break;
+            case STATE_ENSURE: CONFIRM_KEYWORD_OR_IDENTIFIER(TOKEN_ENSURE); break;
+            case STATE_EL: CAN_WE_BRANCH_OR_IDENTIFIER('s', STATE_ELS); break;
+            case STATE_ELS: CAN_WE_BRANCH_OR_IDENTIFIER('e', STATE_ELSE); break;
+            case STATE_ELSE: CONFIRM_KEYWORD_OR_IDENTIFIER(TOKEN_ELSE); break;
 
             // 't' BRANCH: to, then, transition, true
             case STATE_T:
-                if (c == 'o') { state = STATE_TO; APPEND_CHAR(c); }
-                else if (c == 'r') { state = STATE_TR; APPEND_CHAR(c); }
-                else if (isalnum(c) || c == '_') { state = STATE_IN_IDENTIFIER; APPEND_CHAR(c); }
-                else { ungetc(c, source); token.lexeme[lexemeIdx] = '\0'; token.type = TOKEN_IDENTIFIER; state = STATE_DONE; }
+                switch (c) {
+                    CASE_X_BRANCH_TO('o', STATE_TO);
+                    CASE_X_BRANCH_TO('r', STATE_TR);
+                    ELSE_CHECK_IF_POSSIBLE_IDENTIFIER();
+                }
                 break;
-            case STATE_TO: YIELD_KEYWORD_OR_IDENTIFIER(TOKEN_NOISE_WORD); break;
+            case STATE_TO: CONFIRM_KEYWORD_OR_IDENTIFIER(TOKEN_NOISE_WORD); break;
             case STATE_TR:
-                if (c == 'a') { state = STATE_TRA; APPEND_CHAR(c); }
-                else if (c == 'u') { state = STATE_TRU; APPEND_CHAR(c); }
-                else if (isalnum(c) || c == '_') { state = STATE_IN_IDENTIFIER; APPEND_CHAR(c); }
-                else { ungetc(c, source); token.lexeme[lexemeIdx] = '\0'; token.type = TOKEN_IDENTIFIER; state = STATE_DONE; }
+                switch (c) {
+                    CASE_X_BRANCH_TO('a', STATE_TRA);
+                    CASE_X_BRANCH_TO('u', STATE_TRU);
+                    ELSE_CHECK_IF_POSSIBLE_IDENTIFIER();
+                }
                 break;
-            case STATE_TRA: BRANCH_OR_IDENTIFIER('n', STATE_TRAN); break;
-            case STATE_TRAN: BRANCH_OR_IDENTIFIER('s', STATE_TRANS); break;
-            case STATE_TRANS: BRANCH_OR_IDENTIFIER('i', STATE_TRANSI); break;
-            case STATE_TRANSI: BRANCH_OR_IDENTIFIER('t', STATE_TRANSIT); break;
-            case STATE_TRANSIT: BRANCH_OR_IDENTIFIER('i', STATE_TRANSITI); break;
-            case STATE_TRANSITI: BRANCH_OR_IDENTIFIER('o', STATE_TRANSITIO); break;
-            case STATE_TRANSITIO: BRANCH_OR_IDENTIFIER('n', STATE_TRANSITION); break;
-            case STATE_TRANSITION: YIELD_KEYWORD_OR_IDENTIFIER(TOKEN_TRANSITION); break;
-            case STATE_TRU: BRANCH_OR_IDENTIFIER('e', STATE_TRUE); break;
-            case STATE_TRUE: YIELD_KEYWORD_OR_IDENTIFIER(TOKEN_TRUE); break;
+            case STATE_TRA: CAN_WE_BRANCH_OR_IDENTIFIER('n', STATE_TRAN); break;
+            case STATE_TRAN: CAN_WE_BRANCH_OR_IDENTIFIER('s', STATE_TRANS); break;
+            case STATE_TRANS: CAN_WE_BRANCH_OR_IDENTIFIER('i', STATE_TRANSI); break;
+            case STATE_TRANSI: CAN_WE_BRANCH_OR_IDENTIFIER('t', STATE_TRANSIT); break;
+            case STATE_TRANSIT: CAN_WE_BRANCH_OR_IDENTIFIER('i', STATE_TRANSITI); break;
+            case STATE_TRANSITI: CAN_WE_BRANCH_OR_IDENTIFIER('o', STATE_TRANSITIO); break;
+            case STATE_TRANSITIO: CAN_WE_BRANCH_OR_IDENTIFIER('n', STATE_TRANSITION); break;
+            case STATE_TRANSITION: CONFIRM_KEYWORD_OR_IDENTIFIER(TOKEN_TRANSITION); break;
+            case STATE_TRU: CAN_WE_BRANCH_OR_IDENTIFIER('e', STATE_TRUE); break;
+            case STATE_TRUE: CONFIRM_KEYWORD_OR_IDENTIFIER(TOKEN_TRUE); break;
 
             // 'b' BRANCH: bool
-            case STATE_B: BRANCH_OR_IDENTIFIER('o', STATE_BO); break;
-            case STATE_BO: BRANCH_OR_IDENTIFIER('o', STATE_BOO); break;
-            case STATE_BOO: BRANCH_OR_IDENTIFIER('l', STATE_BOOL); break;
-            case STATE_BOOL: YIELD_KEYWORD_OR_IDENTIFIER(TOKEN_BOOL); break;
+            case STATE_B: CAN_WE_BRANCH_OR_IDENTIFIER('o', STATE_BO); break;
+            case STATE_BO: CAN_WE_BRANCH_OR_IDENTIFIER('o', STATE_BOO); break;
+            case STATE_BOO: CAN_WE_BRANCH_OR_IDENTIFIER('l', STATE_BOOL); break;
+            case STATE_BOOL: CONFIRM_KEYWORD_OR_IDENTIFIER(TOKEN_BOOL); break;
 
             // 'c' BRANCH: char
-            case STATE_C: BRANCH_OR_IDENTIFIER('h', STATE_CH); break;
-            case STATE_CH: BRANCH_OR_IDENTIFIER('a', STATE_CHA); break;
-            case STATE_CHA: BRANCH_OR_IDENTIFIER('r', STATE_CHAR_KW); break;
-            case STATE_CHAR_KW: YIELD_KEYWORD_OR_IDENTIFIER(TOKEN_CHAR); break;
+            case STATE_C: CAN_WE_BRANCH_OR_IDENTIFIER('h', STATE_CH); break;
+            case STATE_CH: CAN_WE_BRANCH_OR_IDENTIFIER('a', STATE_CHA); break;
+            case STATE_CHA: CAN_WE_BRANCH_OR_IDENTIFIER('r', STATE_CHAR_KW); break;
+            case STATE_CHAR_KW: CONFIRM_KEYWORD_OR_IDENTIFIER(TOKEN_CHAR); break;
 
             // 'f' BRANCH: float, false, fn, for
             case STATE_F:
-                if (c == 'l') { state = STATE_FL; APPEND_CHAR(c); }
-                else if (c == 'a') { state = STATE_FA; APPEND_CHAR(c); }
-                else if (c == 'n') { state = STATE_FN; APPEND_CHAR(c); }
-                else if (c == 'o') { state = STATE_FO; APPEND_CHAR(c); }
-                else if (isalnum(c) || c == '_') { state = STATE_IN_IDENTIFIER; APPEND_CHAR(c); }
-                else { ungetc(c, source); token.lexeme[lexemeIdx] = '\0'; token.type = TOKEN_IDENTIFIER; state = STATE_DONE; }
+                switch (c) {
+                    CASE_X_BRANCH_TO('l', STATE_FL);
+                    CASE_X_BRANCH_TO('a', STATE_FA);
+                    CASE_X_BRANCH_TO('n', STATE_FN);
+                    CASE_X_BRANCH_TO('o', STATE_FO);
+                    ELSE_CHECK_IF_POSSIBLE_IDENTIFIER();
+                }
                 break;
-            case STATE_FL: BRANCH_OR_IDENTIFIER('o', STATE_FLO); break;
-            case STATE_FLO: BRANCH_OR_IDENTIFIER('a', STATE_FLOA); break;
-            case STATE_FLOA: BRANCH_OR_IDENTIFIER('t', STATE_FLOAT); break;
-            case STATE_FLOAT: YIELD_KEYWORD_OR_IDENTIFIER(TOKEN_FLOAT); break;
-            case STATE_FA: BRANCH_OR_IDENTIFIER('l', STATE_FAL); break;
-            case STATE_FAL: BRANCH_OR_IDENTIFIER('s', STATE_FALS); break;
-            case STATE_FALS: BRANCH_OR_IDENTIFIER('e', STATE_FALSE); break;
-            case STATE_FALSE: YIELD_KEYWORD_OR_IDENTIFIER(TOKEN_FALSE); break;
-            case STATE_FN: YIELD_KEYWORD_OR_IDENTIFIER(TOKEN_FN); break;
-            case STATE_FO: BRANCH_OR_IDENTIFIER('r', STATE_FOR); break;
-            case STATE_FOR: YIELD_KEYWORD_OR_IDENTIFIER(TOKEN_FOR); break;
+            case STATE_FL: CAN_WE_BRANCH_OR_IDENTIFIER('o', STATE_FLO); break;
+            case STATE_FLO: CAN_WE_BRANCH_OR_IDENTIFIER('a', STATE_FLOA); break;
+            case STATE_FLOA: CAN_WE_BRANCH_OR_IDENTIFIER('t', STATE_FLOAT); break;
+            case STATE_FLOAT: CONFIRM_KEYWORD_OR_IDENTIFIER(TOKEN_FLOAT); break;
+            case STATE_FA: CAN_WE_BRANCH_OR_IDENTIFIER('l', STATE_FAL); break;
+            case STATE_FAL: CAN_WE_BRANCH_OR_IDENTIFIER('s', STATE_FALS); break;
+            case STATE_FALS: CAN_WE_BRANCH_OR_IDENTIFIER('e', STATE_FALSE); break;
+            case STATE_FALSE: CONFIRM_KEYWORD_OR_IDENTIFIER(TOKEN_FALSE); break;
+            case STATE_FN: CONFIRM_KEYWORD_OR_IDENTIFIER(TOKEN_FN); break;
+            case STATE_FO: CAN_WE_BRANCH_OR_IDENTIFIER('r', STATE_FOR); break;
+            case STATE_FOR: CONFIRM_KEYWORD_OR_IDENTIFIER(TOKEN_FOR); break;
 
             // 'n' BRANCH: null
-            case STATE_N: BRANCH_OR_IDENTIFIER('u', STATE_NU); break;
-            case STATE_NU: BRANCH_OR_IDENTIFIER('l', STATE_NUL); break;
-            case STATE_NUL: BRANCH_OR_IDENTIFIER('l', STATE_NULL); break;
-            case STATE_NULL: YIELD_KEYWORD_OR_IDENTIFIER(TOKEN_NULL); break;
+            case STATE_N: CAN_WE_BRANCH_OR_IDENTIFIER('u', STATE_NU); break;
+            case STATE_NU: CAN_WE_BRANCH_OR_IDENTIFIER('l', STATE_NUL); break;
+            case STATE_NUL: CAN_WE_BRANCH_OR_IDENTIFIER('l', STATE_NULL); break;
+            case STATE_NULL: CONFIRM_KEYWORD_OR_IDENTIFIER(TOKEN_NULL); break;
 
             // 'r' BRANCH: react, return, readline, readint
             case STATE_R:
-                if (c == 'e') { state = STATE_RE; APPEND_CHAR(c); }
-                else if (isalnum(c) || c == '_') { state = STATE_IN_IDENTIFIER; APPEND_CHAR(c); }
-                else { ungetc(c, source); token.lexeme[lexemeIdx] = '\0'; token.type = TOKEN_IDENTIFIER; state = STATE_DONE; }
+                switch (c) {
+                    CASE_X_BRANCH_TO('e', STATE_RE);
+                    ELSE_CHECK_IF_POSSIBLE_IDENTIFIER();
+                }
                 break;
             case STATE_RE:
-                if (c == 'a') { state = STATE_REA; APPEND_CHAR(c); }
-                else if (c == 't') { state = STATE_RET; APPEND_CHAR(c); }
-                else if (c == 'd') { state = STATE_READ; APPEND_CHAR(c); }
-                else if (isalnum(c) || c == '_') { state = STATE_IN_IDENTIFIER; APPEND_CHAR(c); }
-                else { ungetc(c, source); token.lexeme[lexemeIdx] = '\0'; token.type = TOKEN_IDENTIFIER; state = STATE_DONE; }
+                switch (c) {
+                    CASE_X_BRANCH_TO('a', STATE_REA);
+                    CASE_X_BRANCH_TO('t', STATE_RET);
+                    CASE_X_BRANCH_TO('d', STATE_READ);
+                    ELSE_CHECK_IF_POSSIBLE_IDENTIFIER();
+                }
                 break;
             case STATE_REA:
-                if (c == 'c') { state = STATE_REAC; APPEND_CHAR(c); }
-                else if (c == 'd') { state = STATE_READ; APPEND_CHAR(c); }
-                else if (isalnum(c) || c == '_') { state = STATE_IN_IDENTIFIER; APPEND_CHAR(c); }
-                else { ungetc(c, source); token.lexeme[lexemeIdx] = '\0'; token.type = TOKEN_IDENTIFIER; state = STATE_DONE; }
+                switch (c) {
+                    CASE_X_BRANCH_TO('c', STATE_REAC);
+                    CASE_X_BRANCH_TO('d', STATE_READ);
+                    ELSE_CHECK_IF_POSSIBLE_IDENTIFIER();
+                }
                 break;
-            case STATE_REAC: BRANCH_OR_IDENTIFIER('t', STATE_REACT); break;
-            case STATE_REACT: YIELD_KEYWORD_OR_IDENTIFIER(TOKEN_REACT); break;
-            case STATE_RET: BRANCH_OR_IDENTIFIER('u', STATE_RETU); break;
-            case STATE_RETU: BRANCH_OR_IDENTIFIER('r', STATE_RETUR); break;
-            case STATE_RETUR: BRANCH_OR_IDENTIFIER('n', STATE_RETURN); break;
-            case STATE_RETURN: YIELD_KEYWORD_OR_IDENTIFIER(TOKEN_RETURN); break;
+            case STATE_REAC: CAN_WE_BRANCH_OR_IDENTIFIER('t', STATE_REACT); break;
+            case STATE_REACT: CONFIRM_KEYWORD_OR_IDENTIFIER(TOKEN_REACT); break;
+            case STATE_RET: CAN_WE_BRANCH_OR_IDENTIFIER('u', STATE_RETU); break;
+            case STATE_RETU: CAN_WE_BRANCH_OR_IDENTIFIER('r', STATE_RETUR); break;
+            case STATE_RETUR: CAN_WE_BRANCH_OR_IDENTIFIER('n', STATE_RETURN); break;
+            case STATE_RETURN: CONFIRM_KEYWORD_OR_IDENTIFIER(TOKEN_RETURN); break;
             case STATE_READ:
-                if (c == 'L') { state = STATE_READL; APPEND_CHAR(c); }
-                else if (c == 'I') { state = STATE_READI; APPEND_CHAR(c); }
-                else if (isalnum(c) || c == '_') { state = STATE_IN_IDENTIFIER; APPEND_CHAR(c); }
-                else { ungetc(c, source); token.lexeme[lexemeIdx] = '\0'; token.type = TOKEN_IDENTIFIER; state = STATE_DONE; }
+                switch (c) {
+                    CASE_X_BRANCH_TO('L', STATE_READL);
+                    CASE_X_BRANCH_TO('I', STATE_READI);
+                    ELSE_CHECK_IF_POSSIBLE_IDENTIFIER();
+                }
                 break;
-            case STATE_READL: BRANCH_OR_IDENTIFIER('i', STATE_READLI); break;
-            case STATE_READLI: BRANCH_OR_IDENTIFIER('n', STATE_READLIN); break;
-            case STATE_READLIN: BRANCH_OR_IDENTIFIER('e', STATE_READLINE); break;
-            case STATE_READLINE: YIELD_KEYWORD_OR_IDENTIFIER(TOKEN_READLINE); break;
-            case STATE_READI: BRANCH_OR_IDENTIFIER('n', STATE_READIN); break;
-            case STATE_READIN: BRANCH_OR_IDENTIFIER('t', STATE_READINT); break;
-            case STATE_READINT: YIELD_KEYWORD_OR_IDENTIFIER(TOKEN_READINT); break;
+            case STATE_READL: CAN_WE_BRANCH_OR_IDENTIFIER('i', STATE_READLI); break;
+            case STATE_READLI: CAN_WE_BRANCH_OR_IDENTIFIER('n', STATE_READLIN); break;
+            case STATE_READLIN: CAN_WE_BRANCH_OR_IDENTIFIER('e', STATE_READLINE); break;
+            case STATE_READLINE: CONFIRM_KEYWORD_OR_IDENTIFIER(TOKEN_READLINE); break;
+            case STATE_READI: CAN_WE_BRANCH_OR_IDENTIFIER('n', STATE_READIN); break;
+            case STATE_READIN: CAN_WE_BRANCH_OR_IDENTIFIER('t', STATE_READINT); break;
+            case STATE_READINT: CONFIRM_KEYWORD_OR_IDENTIFIER(TOKEN_READINT); break;
 
             // 'l' BRANCH: loop
-            case STATE_L: BRANCH_OR_IDENTIFIER('o', STATE_LO); break;
-            case STATE_LO: BRANCH_OR_IDENTIFIER('o', STATE_LOO); break;
-            case STATE_LOO: BRANCH_OR_IDENTIFIER('p', STATE_LOOP); break;
-            case STATE_LOOP: YIELD_KEYWORD_OR_IDENTIFIER(TOKEN_LOOP); break;
+            case STATE_L: CAN_WE_BRANCH_OR_IDENTIFIER('o', STATE_LO); break;
+            case STATE_LO: CAN_WE_BRANCH_OR_IDENTIFIER('o', STATE_LOO); break;
+            case STATE_LOO: CAN_WE_BRANCH_OR_IDENTIFIER('p', STATE_LOOP); break;
+            case STATE_LOOP: CONFIRM_KEYWORD_OR_IDENTIFIER(TOKEN_LOOP); break;
 
             // 'm' BRANCH: match
-            case STATE_M: BRANCH_OR_IDENTIFIER('a', STATE_MA); break;
-            case STATE_MA: BRANCH_OR_IDENTIFIER('t', STATE_MAT); break;
-            case STATE_MAT: BRANCH_OR_IDENTIFIER('c', STATE_MATC); break;
-            case STATE_MATC: BRANCH_OR_IDENTIFIER('h', STATE_MATCH); break;
-            case STATE_MATCH: YIELD_KEYWORD_OR_IDENTIFIER(TOKEN_MATCH); break;
+            case STATE_M: CAN_WE_BRANCH_OR_IDENTIFIER('a', STATE_MA); break;
+            case STATE_MA: CAN_WE_BRANCH_OR_IDENTIFIER('t', STATE_MAT); break;
+            case STATE_MAT: CAN_WE_BRANCH_OR_IDENTIFIER('c', STATE_MATC); break;
+            case STATE_MATC: CAN_WE_BRANCH_OR_IDENTIFIER('h', STATE_MATCH); break;
+            case STATE_MATCH: CONFIRM_KEYWORD_OR_IDENTIFIER(TOKEN_MATCH); break;
 
             // 'p' BRANCH: print
-            case STATE_P: BRANCH_OR_IDENTIFIER('r', STATE_PR); break;
-            case STATE_PR: BRANCH_OR_IDENTIFIER('i', STATE_PRI); break;
-            case STATE_PRI: BRANCH_OR_IDENTIFIER('n', STATE_PRIN); break;
-            case STATE_PRIN: BRANCH_OR_IDENTIFIER('t', STATE_PRINT); break;
-            case STATE_PRINT: YIELD_KEYWORD_OR_IDENTIFIER(TOKEN_PRINT); break;
+            case STATE_P: CAN_WE_BRANCH_OR_IDENTIFIER('r', STATE_PR); break;
+            case STATE_PR: CAN_WE_BRANCH_OR_IDENTIFIER('i', STATE_PRI); break;
+            case STATE_PRI: CAN_WE_BRANCH_OR_IDENTIFIER('n', STATE_PRIN); break;
+            case STATE_PRIN: CAN_WE_BRANCH_OR_IDENTIFIER('t', STATE_PRINT); break;
+            case STATE_PRINT: CONFIRM_KEYWORD_OR_IDENTIFIER(TOKEN_PRINT); break;
 
             // 'q' BRANCH: quit
-            case STATE_Q: BRANCH_OR_IDENTIFIER('u', STATE_QU); break;
-            case STATE_QU: BRANCH_OR_IDENTIFIER('i', STATE_QUI); break;
-            case STATE_QUI: BRANCH_OR_IDENTIFIER('t', STATE_QUIT); break;
-            case STATE_QUIT: YIELD_KEYWORD_OR_IDENTIFIER(TOKEN_QUIT); break;
+            case STATE_Q: CAN_WE_BRANCH_OR_IDENTIFIER('u', STATE_QU); break;
+            case STATE_QU: CAN_WE_BRANCH_OR_IDENTIFIER('i', STATE_QUI); break;
+            case STATE_QUI: CAN_WE_BRANCH_OR_IDENTIFIER('t', STATE_QUIT); break;
+            case STATE_QUIT: CONFIRM_KEYWORD_OR_IDENTIFIER(TOKEN_QUIT); break;
 
             // ================================================================
             // IDENTIFIER FALLBACK
             // ================================================================
             case STATE_IN_IDENTIFIER:
                 if (isalnum(c) || c == '_') {
-                    if (lexemeIdx < 255) { APPEND_CHAR(c); }
+                    if (lexemeIdx < 255) { CONSUME_CHAR(c); }
                 } else {
                     ungetc(c, source);
                     token.lexeme[lexemeIdx] = '\0';
@@ -997,4 +1046,3 @@ const char* getTokenTypeName(TokenType type) {
         default:                    return "UNKNOWN";
     }
 }
-

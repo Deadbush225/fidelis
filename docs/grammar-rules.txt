@@ -1,0 +1,100 @@
+EBNF Grammar Rules
+
+Program = { Statement } ;
+Statement = BlockStatement | ( SimpleStatement, ";" ) ;
+BlockStatement = ReactDecl | FnDecl | StateDecl | IfStmt | LoopStmt | ForStmt | MatchStmt | EnsureStmt ;
+Block = "{", { Statement }, "}" ;
+
+ReactDecl = "react", "(", Identifier, ")", ["do"], Block ;
+FnDecl = "fn", Identifier, "(", [ParamList], ")", "->", Type, ["do"], Block ;
+StateDecl = "state", Identifier, ["do"], Block ;
+
+IfStmt = "if", "(", Expression, ")", ( Statement | Block ), 
+         [ "else", ( Statement | Block ) ] ;
+
+LoopStmt = "loop", ["do"], Block ;
+ForStmt = "for", "(", Type, Identifier, "=", Expression, ";", Expression, ";", Assignment, ")", ["do"], Block ;
+
+MatchStmt = "match", Identifier, ["do"], "{", { MatchCase }, "}" ;
+MatchCase = ( StringLiteral | "_" ), "->", ( Block | SimpleStatement, ";" ) ;
+
+EnsureStmt = Type, Identifier, ["is"], "=", "ensure", Expression, "else", Block ;
+
+Simple Statements
+
+SimpleStatement = VarDecl | Assignment | PrintStmt | TransitionStmt | ReturnStmt 
+| ExprStmt ;
+VarDecl = Type, Identifier, ["is"], "=", Expression ;
+Assignment = Identifier, AssignOp, Expression ;
+PrintStmt = "print", "(", Expression, ")" ;
+TransitionStmt = "transition", ["to"], Identifier ;
+ReturnStmt = "return", Expression ;
+ExprStmt = Expression ;
+
+Types and Identifiers
+
+Type = "int" | "string" | "bool" | "float" | "char" 
+     | "int?" | "string?" | "bool?" | "float?" | "char?" 
+     | "[", Type, "]", ["?"] ;
+ParamList = Type, Identifier, { ",", Type, Identifier } ;
+Identifier = ( Letter | "_" ), { Letter | Digit | "_" } ;
+(* Constraint: Identifier length must be <= 32 characters. *)
+
+Expressions & Operator Precedence
+
+Level 10: Pipeline (Left-to-Right)
+Expression = PipelineExpr ;
+PipelineExpr = LogicalOrExpr, { "|>", FunctionCall } ;
+
+Level 9: Logical OR (Left-to-Right)
+LogicalOrExpr = LogicalAndExpr, { "||", LogicalAndExpr } ;
+
+Level 8: Logical AND (Left-to-Right)
+LogicalAndExpr = EqualityExpr, { "&&", EqualityExpr } ;
+
+Level 7: Equality (Left-to-Right)
+EqualityExpr = RelationalExpr, { ( "==" | "!=" ), RelationalExpr } ;
+
+Level 6: Relational (Left-to-Right)
+RelationalExpr = AdditiveExpr, { ( "<" | ">" | "<=" | ">=" ), AdditiveExpr } ;
+
+Level 5: Additive (Left-to-Right)
+AdditiveExpr = MultiplicativeExpr, { ( "+" | "-" ), MultiplicativeExpr } ;
+
+Level 4: Multiplicative (Left-to-Right)
+MultiplicativeExpr = UnaryExpr, { ( "*" | "/" | "\" | "%" ), UnaryExpr } ;
+
+Level 3: Logical NOT (Right-to-Left)
+UnaryExpr = [ "!" | "-" ], ExponentExpr ;
+
+Level 2: Exponent (Right-to-Left Associativity)
+ExponentExpr = PrimaryExpr, [ "^", ExponentExpr ] ;
+
+Level 1: Parentheses, Grouping, & Access
+PrimaryExpr = Identifier 
+            | Literal 
+            | "(", Expression, ")" 
+            | ArrayAccess 
+            | FunctionCall ;
+
+ArrayAccess = Identifier, "[", Expression, "]" ;
+FunctionCall = Identifier, "(", [ ArgList ], ")" ;
+ArgList = Expression, { ",", Expression } ;
+
+
+Terminals & Lexical Primitives
+
+AssignOp = "=" | "+=" | "-=" | "*=" | "/=" | "%=" ;
+Literal = IntLiteral | FloatLiteral | CharLiteral | StringLiteral | BoolLiteral | NullLiteral | ArrayLiteral ;
+BoolLiteral = "true" | "false" ;
+NullLiteral = "null" ;
+IntLiteral = Digit, { Digit } ;
+FloatLiteral = Digit, { Digit }, ".", Digit, { Digit } ;
+StringLiteral = '"', { /* any character except " */ }, '"' ;
+CharLiteral = "'", /* any single character */, "'" ;
+ArrayLiteral = "[", [ ArgList ], "]" ;
+Letter = "A" | "B" | "C" | "D" | "E" | "F" | "G" | "H" | "I" | "J" | "K" | "L" | "M" | 
+         "N" | "O" | "P" | "Q" | "R" | "S" | "T" | "U" | "V" | "W" | "X" | "Y" | "Z" | 
+         "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j" | "k" | "l" | "m" | 
+         "n" | "o" | "p" | "q" | "r" | "s" | "t" | "u" | "v" | "w" | "x" | "y" | "z" ;
+Digit = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" ;
