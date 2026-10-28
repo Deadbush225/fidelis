@@ -1,0 +1,18 @@
+// Bubble sort repeatedly swaps adjacent values that are out of order.
+[int] numbers = [64, 34, 25, 12, 22, 11, 90];
+int itemCount = length(numbers);
+
+for (int pass = 0; pass < itemCount - 1; pass += 1) {
+    for (int index = 0; index < itemCount - pass - 1; index += 1) {
+        if (numbers[index] > numbers[index + 1]) {
+            int temporary = numbers[index];
+            numbers[index] = numbers[index + 1];
+            numbers[index + 1] = temporary;
+        }
+    }
+}
+
+print("Sorted numbers:");
+for (int index = 0; index < itemCount; index += 1) {
+    print(numbers[index]);
+}
