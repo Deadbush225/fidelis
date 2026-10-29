@@ -23,6 +23,10 @@ fn formatStatus(bool status) -> string {
     return (status == true) ? "ACTIVE" : "INACTIVE";
 }
 
+fn removeSpaces(string text) -> string {
+    return replace(text, " ", "");
+}
+
 // 4. ISOLATED STATES (state & transition)
 state Boot {
     print("--- SYSTEM LOCKED ---");
@@ -55,7 +59,8 @@ state Dashboard {
     loop {
         print("\nSelect an action (1-4):");
         
-        string choice = readLine();
+        // Pipeline used purely for string manipulation
+        string choice = readLine() |> removeSpaces();
         
         match choice {
             "1" -> transition to LightControl;
