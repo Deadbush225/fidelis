@@ -88,7 +88,7 @@ typedef enum {
     TOKEN_PIPELINE,  // |>
     TOKEN_ARROW,     // ->
     TOKEN_QUESTION,  // ?  (optional-type suffix)
-    TOKEN_DOT, // . (intrinsic property operator)
+    TOKEN_DOT,       // . (intrinsic property operator)
 
     // ---- Delimiters ----
     TOKEN_SEMICOLON,
@@ -121,14 +121,15 @@ typedef enum {
 
 typedef struct {
     TokenType type;
-    char lexeme[256];  // Increased from 33 to support string/comment content
+    char lexeme[256];      // Increased from 33 to support string/comment content
+    char transitions[512]; // Records the DFA state transition path (e.g., STATE_START -> STATE_V -> ...)
 } Token;
 
 // ============================================================================
 // LEXER FUNCTION DECLARATIONS
 // ============================================================================
 
-Token getNextToken(FILE *source);
+Token getNextToken(FILE *source, FILE *transition);
 const char* getTokenTypeName(TokenType type);
 
 #endif

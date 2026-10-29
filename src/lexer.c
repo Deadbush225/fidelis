@@ -1,4 +1,5 @@
 #include "lexer.h"
+#include "helper.h"
 #include <ctype.h>
 #include <string.h>
 #include <stdlib.h>
@@ -114,6 +115,9 @@ typedef enum {
     do { \
         if (lexemeIdx < GET_MAX_LEXEME_LENGTH - 1) { \
             token.lexeme[lexemeIdx++] = (char)(ch); \
+            token.lexeme[lexemeIdx] = '\0'; /* Null-terminate after each append */\
+            printf("Consumed %-2s to lexeme. Current lexeme is \e[0;35m%-40s\e[0m | Current token: \e[0;35m%s\e[0m\n", escapeCharacter((char)(ch)), escapedLexeme(token.lexeme), getStateName(state)); \
+            fprintf(transition, "Consumed %-2s to lexeme. Current lexeme is %-40s | Current token: %s \n", escapeCharacter((char)(ch)), escapedLexeme(token.lexeme) , getStateName(state)); \
         } \
     } while (0)
 
@@ -127,6 +131,8 @@ typedef enum {
         token.lexeme[lexemeIdx] = '\0'; \
         token.type = _token; \
         state = STATE_DONE; \
+        printf("\e[0;32mAccepted Lexeme:\e[0m %s | \e[0;32mtoken type:\e[0m %s\n", escapedLexeme(token.lexeme), getTokenTypeName(token.type)); \
+        fprintf(transition, "Accepted Lexeme: %s | token type: %s\n", token.lexeme, getTokenTypeName(token.type)); \
     } while (0)
 
 // Emit a lexer error token with a fixed error message.
@@ -139,6 +145,8 @@ typedef enum {
         strcpy(token.lexeme, _str); \
         token.type = TOKEN_ERROR; \
         state = STATE_DONE; \
+        printf("\e[0;31mLexer Error:\e[0m %s | \e[0;31mtoken type:\e[0m %s\n", token.lexeme, getTokenTypeName(token.type)); \
+        fprintf(transition, "Lexer Error: %s | token type: %s\n", token.lexeme, getTokenTypeName(token.type)); \
     } while (0)
 
 // Identifier Recognizer - if it's alphanumeric, keep building an identifier 
@@ -192,19 +200,218 @@ typedef enum {
     } while(0)
 
 // ============================================================================
+// ============================================================================
+// DFA STATE NAME MAPPING & TRANSITION TRACKING
+// ============================================================================
+
+/*
+getStateName - Maps a LexerState enum value to its corresponding string identifier.
+               Used to generate human-readable DFA transition traces.
+
+Parameters:
+    LexerState state - The DFA state to convert.
+
+Returns:
+    const char* - The name of the state (e.g. "STATE_START", "STATE_INT").
+*/
+static const char* getStateName(LexerState state) {
+    switch (state) {
+        case STATE_START:                   return "STATE_START";
+
+        case STATE_IN_SLASH:                return "STATE_IN_SLASH";
+        case STATE_IN_LINE_COMMENT:         return "STATE_IN_LINE_COMMENT";
+        case STATE_IN_BLOCK_COMMENT:        return "STATE_IN_BLOCK_COMMENT";
+        case STATE_IN_BLOCK_COMMENT_STAR:   return "STATE_IN_BLOCK_COMMENT_STAR";
+
+        case STATE_IN_NUMBER:               return "STATE_IN_NUMBER";
+        case STATE_IN_FLOAT:                return "STATE_IN_FLOAT";
+
+        case STATE_IN_STRING:               return "STATE_IN_STRING";
+        case STATE_IN_CHAR:                 return "STATE_IN_CHAR";
+
+        case STATE_IN_MINUS:                return "STATE_IN_MINUS";
+        case STATE_IN_PLUS:                 return "STATE_IN_PLUS";
+        case STATE_IN_STAR:                 return "STATE_IN_STAR";
+        case STATE_IN_PERCENT:              return "STATE_IN_PERCENT";
+        case STATE_IN_PIPE:                 return "STATE_IN_PIPE";
+        case STATE_IN_AMPERSAND:            return "STATE_IN_AMPERSAND";
+        case STATE_IN_EQUALS:               return "STATE_IN_EQUALS";
+        case STATE_IN_NOT:                  return "STATE_IN_NOT";
+        case STATE_IN_LT:                   return "STATE_IN_LT";
+        case STATE_IN_GT:                   return "STATE_IN_GT";
+
+        case STATE_I:                       return "STATE_I";
+        case STATE_IS:                      return "STATE_IS";
+        case STATE_IN_KW:                   return "STATE_IN_KW";
+        case STATE_INT:                     return "STATE_INT";
+        case STATE_IF:                      return "STATE_IF";
+
+        case STATE_D:                       return "STATE_D";
+        case STATE_DO:                      return "STATE_DO";
+
+        case STATE_T:                       return "STATE_T";
+        case STATE_TO:                      return "STATE_TO";
+        case STATE_TR:                      return "STATE_TR";
+        case STATE_TRA:                     return "STATE_TRA";
+        case STATE_TRAN:                    return "STATE_TRAN";
+        case STATE_TRANS:                   return "STATE_TRANS";
+        case STATE_TRANSI:                  return "STATE_TRANSI";
+        case STATE_TRANSIT:                 return "STATE_TRANSIT";
+        case STATE_TRANSITI:                return "STATE_TRANSITI";
+        case STATE_TRANSITIO:               return "STATE_TRANSITIO";
+        case STATE_TRANSITION:              return "STATE_TRANSITION";
+        case STATE_TRU:                     return "STATE_TRU";
+        case STATE_TRUE:                    return "STATE_TRUE";
+
+        case STATE_S:                       return "STATE_S";
+        case STATE_ST:                      return "STATE_ST";
+        case STATE_STA:                     return "STATE_STA";
+        case STATE_STAT:                    return "STATE_STAT";
+        case STATE_STATE_KW:                return "STATE_STATE_KW";
+        case STATE_STR:                     return "STATE_STR";
+        case STATE_STRI:                    return "STATE_STRI";
+        case STATE_STRIN:                   return "STATE_STRIN";
+        case STATE_STRING:                  return "STATE_STRING";
+        case STATE_SL:                      return "STATE_SL";
+        case STATE_SLE:                     return "STATE_SLE";
+        case STATE_SLEE:                    return "STATE_SLEE";
+        case STATE_SLEEP:                   return "STATE_SLEEP";
+
+        case STATE_E:                       return "STATE_E";
+        case STATE_EN:                      return "STATE_EN";
+        case STATE_ENS:                     return "STATE_ENS";
+        case STATE_ENSU:                    return "STATE_ENSU";
+        case STATE_ENSUR:                   return "STATE_ENSUR";
+        case STATE_ENSURE:                  return "STATE_ENSURE";
+        case STATE_EL:                      return "STATE_EL";
+        case STATE_ELS:                     return "STATE_ELS";
+        case STATE_ELSE:                    return "STATE_ELSE";
+
+        case STATE_B:                       return "STATE_B";
+        case STATE_BO:                      return "STATE_BO";
+        case STATE_BOO:                     return "STATE_BOO";
+        case STATE_BOOL:                    return "STATE_BOOL";
+
+        case STATE_C:                       return "STATE_C";
+        case STATE_CH:                      return "STATE_CH";
+        case STATE_CHA:                     return "STATE_CHA";
+        case STATE_CHAR_KW:                 return "STATE_CHAR_KW";
+
+        case STATE_F:                       return "STATE_F";
+        case STATE_FL:                      return "STATE_FL";
+        case STATE_FLO:                     return "STATE_FLO";
+        case STATE_FLOA:                    return "STATE_FLOA";
+        case STATE_FLOAT:                   return "STATE_FLOAT";
+        case STATE_FA:                      return "STATE_FA";
+        case STATE_FAL:                     return "STATE_FAL";
+        case STATE_FALS:                    return "STATE_FALS";
+        case STATE_FALSE:                   return "STATE_FALSE";
+        case STATE_FN:                      return "STATE_FN";
+        case STATE_FO:                      return "STATE_FO";
+        case STATE_FOR:                     return "STATE_FOR";
+
+        case STATE_N:                       return "STATE_N";
+        case STATE_NU:                      return "STATE_NU";
+        case STATE_NUL:                     return "STATE_NUL";
+        case STATE_NULL:                    return "STATE_NULL";
+
+        case STATE_R:                       return "STATE_R";
+        case STATE_RE:                      return "STATE_RE";
+        case STATE_REA:                     return "STATE_REA";
+        case STATE_REAC:                    return "STATE_REAC";
+        case STATE_REACT:                   return "STATE_REACT";
+        case STATE_RET:                     return "STATE_RET";
+        case STATE_RETU:                    return "STATE_RETU";
+        case STATE_RETUR:                   return "STATE_RETUR";
+        case STATE_RETURN:                  return "STATE_RETURN";
+        case STATE_READ:                    return "STATE_READ";
+        case STATE_READL:                   return "STATE_READL";
+        case STATE_READLI:                  return "STATE_READLI";
+        case STATE_READLIN:                 return "STATE_READLIN";
+        case STATE_READLINE:                return "STATE_READLINE";
+        case STATE_READI:                   return "STATE_READI";
+        case STATE_READIN:                  return "STATE_READIN";
+        case STATE_READINT:                 return "STATE_READINT";
+
+        case STATE_L:                       return "STATE_L";
+        case STATE_LO:                      return "STATE_LO";
+        case STATE_LOO:                     return "STATE_LOO";
+        case STATE_LOOP:                    return "STATE_LOOP";
+
+        case STATE_M:                       return "STATE_M";
+        case STATE_MA:                      return "STATE_MA";
+        case STATE_MAT:                     return "STATE_MAT";
+        case STATE_MATC:                    return "STATE_MATC";
+        case STATE_MATCH:                   return "STATE_MATCH";
+
+        case STATE_P:                       return "STATE_P";
+        case STATE_PR:                      return "STATE_PR";
+        case STATE_PRI:                     return "STATE_PRI";
+        case STATE_PRIN:                    return "STATE_PRIN";
+        case STATE_PRINT:                   return "STATE_PRINT";
+
+        case STATE_Q:                       return "STATE_Q";
+        case STATE_QU:                      return "STATE_QU";
+        case STATE_QUI:                     return "STATE_QUI";
+        case STATE_QUIT:                    return "STATE_QUIT";
+
+        case STATE_IN_IDENTIFIER:           return "STATE_IN_IDENTIFIER";
+        case STATE_DONE:                    return "STATE_DONE";
+        default:                            return "STATE_UNKNOWN";
+    }
+}
+
+/*
+appendTransition - Appends a state transition to the token's transition trace string.
+                   Transitions are formatted as: "STATE_A -> STATE_B -> ...".
+
+Parameters:
+    Token *token     - Pointer to the token receiving the transition.
+    LexerState state - The newly reached DFA state to append.
+*/
+static void appendTransition(Token *token, LexerState state) {
+    const char *name = getStateName(state);
+    size_t currentLen = strlen(token->transitions);
+    size_t nameLen = strlen(name);
+    const char *sep = (currentLen > 0) ? " -> " : "";
+    size_t sepLen = strlen(sep);
+
+    if (currentLen + sepLen + nameLen < sizeof(token->transitions)) {
+        strcat(token->transitions, sep);
+        strcat(token->transitions, name);
+    }
+}
+
+// ============================================================================
 // TOKEN GENERATION FUNCTIONS
 // ============================================================================
 
-Token getNextToken(FILE *source) {
+Token getNextToken(FILE *source, FILE *transition) {
     Token token;
     token.lexeme[0] = '\0';
     int lexemeIdx = 0;
     int escaped = 0;
+    token.transitions[0] = '\0'; // Initialize empty DFA state transition trace
     LexerState state = STATE_START;
     int c;
 
+    printf("=================================================== Scanning token... =================================================\n");
+    fprintf(transition, "=================================================== Scanning token... =================================================\n");
+    
     while (state != STATE_DONE) {
         c = fgetc(source);
+        
+        // Skip leading whitespace between tokens without recording a state transition
+        if (state == STATE_START && isspace(c)) {
+            continue;
+        }
+
+        // Record the initial STATE_START once the first token byte is encountered
+        if (token.transitions[0] == '\0') {
+            appendTransition(&token, STATE_START);
+        }
+
+        LexerState prevState = state; // Track current state to detect transitions after switch
 
         switch (state) {
             // ================================================================
@@ -579,6 +786,9 @@ Token getNextToken(FILE *source) {
             // ================================================================
             case STATE_IN_CHAR:
                 if (lexemeIdx - 1 >= 2) {
+                    while (c != '\'' && c != '\n' && c != '\r' && c != EOF) {
+                        c = fgetc(source);
+                    }
                     ACCEPT_ERROR("Char literal too long");
                     break;
                 }
@@ -961,12 +1171,25 @@ Token getNextToken(FILE *source) {
             case STATE_DONE:
                 break;
         }
+
+        // If the DFA transitioned to a new state in this step, record it in the trace
+        if (state != prevState) {
+            appendTransition(&token, state);
+        }
+
+        switch (0) {
+            default:
+                break;
+        }
     }
 
     if (token.type == TOKEN_IDENTIFIER && strlen(token.lexeme) > 32) {
         token.type = TOKEN_ERROR;
     }
 
+
+    printf("=======================================================================================================================\n");
+    fprintf(transition, "=======================================================================================================================\n");
     return token;
 }
 

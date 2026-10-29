@@ -1,0 +1,38 @@
+// ============================================================================
+// FIDELIS TEST SUITE: ALL INVALID LEXICAL RULES
+// ============================================================================
+
+// Rule 1: Illegal / Unrecognized Characters
+@
+$
+#
+~
+`
+
+// Rule 2: Malformed Numeric Literals / Identifier Starting with Digits
+123badVariable
+45_invalid
+3.14invalidFloat
+
+// Rule 3: Identifier Exceeding Max Length Limit (32 Characters Max)
+thisIdentifierNameIsWayTooLongAndExceedsThirtyTwoChars
+
+// Rule 4: Unterminated String Literal (Newline encountered before closing quote)
+"This string is missing its closing quote
+
+// Rule 5: Empty Character Literal
+''
+
+// Rule 6: Character Literal Exceeding Single Byte / Too Long
+'ab'
+'toolong'
+
+// Rule 7: Unterminated Character Literal (Newline before closing single quote)
+'x
+
+// Rule 8: Incomplete Multi-character Operators (Standalone | or &)
+| 
+& 
+
+// Rule 9: Unterminated Block Comment (Must be at the very end of file before EOF)
+/* Unterminated block comment without closing star slash
