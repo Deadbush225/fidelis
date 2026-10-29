@@ -131,22 +131,13 @@ typedef enum {
         token.lexeme[lexemeIdx] = '\0'; \
         token.type = _token; \
         state = STATE_DONE; \
-        printf("\e[0;32mAccepted Lexeme:\e[0m %s | \e[0;32mtoken type:\e[0m %s\n", escapedLexeme(token.lexeme), getTokenTypeName(token.type)); \
-        fprintf(transition, "Accepted Lexeme: %s | token type: %s\n", token.lexeme, getTokenTypeName(token.type)); \
-    } while (0)
-
-// Emit a lexer error token with a fixed error message.
-// Side effects:
-// - Copies _str into token.lexeme
-// - Sets token type to TOKEN_ERROR
-// - Ends scanning for the current token
-#define ACCEPT_ERROR(_str) \
-    do { \
-        strcpy(token.lexeme, _str); \
-        token.type = TOKEN_ERROR; \
-        state = STATE_DONE; \
-        printf("\e[0;31mLexer Error:\e[0m %s | \e[0;31mtoken type:\e[0m %s\n", token.lexeme, getTokenTypeName(token.type)); \
-        fprintf(transition, "Lexer Error: %s | token type: %s\n", token.lexeme, getTokenTypeName(token.type)); \
+        if (strncmp(getTokenTypeName(token.type), "ERR_", 4) == 0) { \
+            printf("\e[0;31mRejected Lexeme:\e[0m %s | \e[0;31mtoken type:\e[0m %s\n", escapedLexeme(token.lexeme), getTokenTypeName(token.type)); \
+            fprintf(transition, "Rejected Lexeme: %s | token type: %s\n", token.lexeme, getTokenTypeName(token.type)); \
+        } else { \
+            printf("\e[0;32mAccepted Lexeme:\e[0m %s | \e[0;32mtoken type:\e[0m %s\n", escapedLexeme(token.lexeme), getTokenTypeName(token.type)); \
+            fprintf(transition, "Accepted Lexeme: %s | token type: %s\n", token.lexeme, getTokenTypeName(token.type)); \
+        } \
     } while (0)
 
 // Identifier Recognizer - if it's alphanumeric, keep building an identifier 
@@ -608,7 +599,7 @@ Token getNextToken(FILE *source, FILE *transition) {
                                 CONSUME_CHAR(c);
                             } else {
                                 CONSUME_CHAR(c);
-                                ACCEPT_LEXEME(TOKEN_ERROR);
+                                ACCEPT_LEXEME(TOKEN_ERR_UNRECOGNIZED);
                             }
                         }
                     }
@@ -669,7 +660,7 @@ Token getNextToken(FILE *source, FILE *transition) {
                         CONSUME_CHAR(c);
                         break;
                     case EOF:
-                        ACCEPT_LEXEME(TOKEN_ERROR); // Unterminated block comment
+                        ACCEPT_LEXEME(TOKEN_ERR_UNTERMINATED_BLOCK_COMMENT);
                         break;
                     default:
                         CONSUME_CHAR(c);
@@ -687,8 +678,7 @@ Token getNextToken(FILE *source, FILE *transition) {
                         CONSUME_CHAR(c);
                         break;
                     case EOF:
-                        strcpy(token.lexeme, "Unterminated block comment");
-                        ACCEPT_LEXEME(TOKEN_ERROR);
+                        ACCEPT_LEXEME(TOKEN_ERR_UNTERMINATED_BLOCK_COMMENT);
                         break;
                     default:
                         state = STATE_IN_BLOCK_COMMENT;
@@ -713,7 +703,7 @@ Token getNextToken(FILE *source, FILE *transition) {
                         }
                     }
                     if (c != EOF) ungetc(c, source);
-                    ACCEPT_LEXEME(TOKEN_ERROR);
+                    ACCEPT_LEXEME(TOKEN_ERR_INVALID_NUMBER);
                 } else {
                     ungetc(c, source);
                     ACCEPT_LEXEME(TOKEN_INT_LITERAL);
@@ -727,7 +717,7 @@ Token getNextToken(FILE *source, FILE *transition) {
                 } else {
                     // Trailing dot without digits (e.g., "42.") is malformed
                     ungetc(c, source);
-                    ACCEPT_LEXEME(TOKEN_ERROR);
+                    ACCEPT_LEXEME(TOKEN_ERR_MALFORMED_FLOAT);
                 }
                 break;
 
@@ -743,7 +733,7 @@ Token getNextToken(FILE *source, FILE *transition) {
                         }
                     }
                     if (c != EOF) ungetc(c, source);
-                    ACCEPT_LEXEME(TOKEN_ERROR);
+                    ACCEPT_LEXEME(TOKEN_ERR_INVALID_NUMBER);
                 } else {
                     ungetc(c, source);
                     ACCEPT_LEXEME(TOKEN_FLOAT_LITERAL);
@@ -774,7 +764,7 @@ Token getNextToken(FILE *source, FILE *transition) {
                     case EOF:
                     case '\n':
                     case '\r':
-                        ACCEPT_LEXEME(TOKEN_ERROR);
+                        ACCEPT_LEXEME(TOKEN_ERR_UNTERMINATED_STRING);
                         break;
                     default:
                         CONSUME_CHAR(c);
@@ -789,7 +779,7 @@ Token getNextToken(FILE *source, FILE *transition) {
                     while (c != '\'' && c != '\n' && c != '\r' && c != EOF) {
                         c = fgetc(source);
                     }
-                    ACCEPT_ERROR("Char literal too long");
+                    ACCEPT_LEXEME(TOKEN_ERR_CHAR_TOO_LONG);
                     break;
                 }
 
@@ -802,14 +792,15 @@ Token getNextToken(FILE *source, FILE *transition) {
                             CONSUME_CHAR(c);
                             ACCEPT_LEXEME(TOKEN_CHAR_LITERAL);
                         } else {
-                            ACCEPT_ERROR((contentLen == 0) ? "Empty char literal" : "Char literal too long");
+                            ACCEPT_LEXEME((contentLen == 0) ? TOKEN_ERR_EMPTY_CHAR : TOKEN_ERR_CHAR_TOO_LONG);
+
                         }
                         break;
                     }
                     case EOF:
                     case '\n':
                     case '\r':
-                        ACCEPT_ERROR("Unterminated char");
+                        ACCEPT_LEXEME(TOKEN_ERR_UNTERMINATED_CHAR);
                         break;
                     default: 
                         CONSUME_CHAR(c);
@@ -884,7 +875,7 @@ Token getNextToken(FILE *source, FILE *transition) {
                         break;
                     default:
                         ungetc(c, source);
-                        ACCEPT_LEXEME(TOKEN_ERROR);
+                        ACCEPT_LEXEME(TOKEN_ERR_INVALID_OPERATOR);
                 }
                 break;
 
@@ -896,7 +887,7 @@ Token getNextToken(FILE *source, FILE *transition) {
                         break;
                     default:
                         ungetc(c, source);
-                        ACCEPT_LEXEME(TOKEN_ERROR);
+                        ACCEPT_LEXEME(TOKEN_ERR_INVALID_OPERATOR);
                         break;
                 }
                 break;
@@ -1163,7 +1154,7 @@ Token getNextToken(FILE *source, FILE *transition) {
                 } else {
                     ungetc(c, source);
                     token.lexeme[lexemeIdx] = '\0';
-                    token.type = (lexemeIdx > 32) ? TOKEN_ERROR : TOKEN_IDENTIFIER;
+                    token.type = (lexemeIdx > 32) ? TOKEN_ERR_IDENTIFIER_TOO_LONG : TOKEN_IDENTIFIER;
                     state = STATE_DONE;
                 }
                 break;
@@ -1184,7 +1175,7 @@ Token getNextToken(FILE *source, FILE *transition) {
     }
 
     if (token.type == TOKEN_IDENTIFIER && strlen(token.lexeme) > 32) {
-        token.type = TOKEN_ERROR;
+        token.type = TOKEN_ERR_IDENTIFIER_TOO_LONG;
     }
 
 
@@ -1282,7 +1273,19 @@ const char* getTokenTypeName(TokenType type) {
         case TOKEN_BLOCK_COMMENT:   return "BLOCK_COMMENT";
         case TOKEN_NOISE_WORD:      return "NOISE_WORD";
         case TOKEN_EOF:             return "EOF";
-        case TOKEN_ERROR:           return "TOKEN_ERROR";
+        
+        case TOKEN_ERR_UNTERMINATED_BLOCK_COMMENT: return "ERR_UNTERMINATED_BLOCK_COMMENT";
+        case TOKEN_ERR_INVALID_NUMBER:      return "ERR_INVALID_NUMBER";
+        case TOKEN_ERR_MALFORMED_FLOAT:     return "ERR_MALFORMED_FLOAT";
+        case TOKEN_ERR_UNTERMINATED_STRING: return "ERR_UNTERMINATED_STRING";
+        case TOKEN_ERR_UNTERMINATED_CHAR:   return "ERR_UNTERMINATED_CHAR";
+        case TOKEN_ERR_CHAR_TOO_LONG:       return "ERR_CHAR_TOO_LONG";
+        case TOKEN_ERR_EMPTY_CHAR:          return "ERR_EMPTY_CHAR";
+        case TOKEN_ERR_INVALID_OPERATOR:    return "ERR_INVALID_OPERATOR";
+        case TOKEN_ERR_IDENTIFIER_TOO_LONG: return "ERR_IDENTIFIER_TOO_LONG";
+        case TOKEN_ERR_UNRECOGNIZED:        return "ERR_UNRECOGNIZED";
+
+
         default:                    return "UNKNOWN";
     }
 }
