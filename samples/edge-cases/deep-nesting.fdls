@@ -1,0 +1,24 @@
+// Edge Case: Deep Nesting and Stacked Delimiters
+
+state RootState {
+    int depth = 1;
+
+    if (depth == 1) {
+        if ((depth + 1) == 2) {
+            for (int i = 0; i < 3; i += 1) {
+                // Stacked brackets and parentheses
+                [int] numbers = [10, 20, 30];
+                int calculated = ((((depth + i) * (depth - 1)) / 2) % 3);
+
+                if (calculated == 0) {
+                    loop {
+                        if (numbers[0] == 10) {
+                            print("Reached inner boundary.");
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
