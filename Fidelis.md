@@ -761,6 +761,45 @@ collections.
 |             |             | \[int\] scores = \[90, 85, 88\];           |
 +-------------+-------------+--------------------------------------------+
 
+### Standard Library
+
+Fidelis provides built-in functions for common operations on strings and
+arrays. These functions use the same call syntax as user-defined functions;
+their names are not keywords or reserved words.
+
+#### `length`
+
+```text
+length(string value) -> int
+length([T] value) -> int
+```
+
+Returns the number of elements in an array or the number of characters in a
+string. `T` represents any supported element type. The argument must be a
+non-null array or string. Array indices are zero-based, so the result is the
+first index past the end of the array.
+
+```fidelis
+[int] scores = [90, 85, 88];
+int scoreCount = length(scores); // 3
+int labelLength = length("ACTIVE"); // 6
+```
+
+#### `replace`
+
+```text
+replace(string source, string search, string replacement) -> string
+```
+
+Returns a new string made by replacing every non-overlapping occurrence of
+`search` in `source` with `replacement`. Matching is case-sensitive, and the
+source string is not modified. If `search` is empty, the result is `source`
+unchanged. All three arguments must be non-null strings.
+
+```fidelis
+string normalized = replace("Ada Lovelace", " ", ""); // "AdaLovelace"
+```
+
 ### Statements
 
 #### Declaration Statements
