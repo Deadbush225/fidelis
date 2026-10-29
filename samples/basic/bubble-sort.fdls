@@ -1,6 +1,6 @@
 // Bubble sort repeatedly swaps adjacent values that are out of order.
 [int] numbers = [64, 34, 25, 12, 22, 11, 90];
-int itemCount = length(numbers);
+int itemCount = numbers.length;
 
 for (int pass = 0; pass < itemCount - 1; pass += 1) {
     for (int index = 0; index < itemCount - pass - 1; index += 1) {
