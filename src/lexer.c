@@ -19,6 +19,7 @@ typedef enum {
 
     // ---- Number Parsing ----
     STATE_IN_NUMBER,
+    STATE_IN_FLOAT_DOT,
     STATE_IN_FLOAT,
 
     // ---- String & Character Parsing ----
@@ -702,7 +703,7 @@ Token getNextToken(FILE *source, FILE *transition) {
                 if (isdigit(c)) {
                     CONSUME_CHAR(c);
                 } else if (c == '.') {
-                    state = STATE_IN_FLOAT;
+                    state = STATE_IN_FLOAT_DOT;
                     CONSUME_CHAR(c);
                 } else if (isalpha(c) || c == '_') {
                     CONSUME_CHAR(c);
@@ -719,12 +720,24 @@ Token getNextToken(FILE *source, FILE *transition) {
                 }
                 break;
 
+            case STATE_IN_FLOAT_DOT:
+                if (isdigit(c)) {
+                    state = STATE_IN_FLOAT;
+                    CONSUME_CHAR(c);
+                } else {
+                    // Trailing dot without digits (e.g., "42.") is malformed
+                    ungetc(c, source);
+                    ACCEPT_LEXEME(TOKEN_ERROR);
+                }
+                break;
+
             case STATE_IN_FLOAT:
                 if (isdigit(c)) {
                     CONSUME_CHAR(c);
-                } else if (isalpha(c) || c == '_') {
+                } else if (isalpha(c) || c == '_' || c == '.') {
+                    // Multiple dots (e.g., "1.2.3") or letters (e.g., "1.2abc")
                     CONSUME_CHAR(c);
-                    while ((c = fgetc(source)) != EOF && (isalnum(c) || c == '_')) {
+                    while ((c = fgetc(source)) != EOF && (isalnum(c) || c == '_' || c == '.')) {
                         if (lexemeIdx < (int)sizeof(token.lexeme) - 1) {
                             CONSUME_CHAR(c);
                         }

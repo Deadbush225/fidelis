@@ -19,8 +19,12 @@ int main(int argc, char *argv[]) {
     const char *transitionTraceOutputPath = "outputs/transition_trace.txt";
 
     if (argc == 1) {
-        printf("\e[1;31mNo input file specified. Using default: %s \e[0m\n", inputFileName);
+        printf("\e[1;31mNo input file specified. Please provide a .fdls file as an argument.\e[0m\n");
+        return 1;
     }
+
+    const char *filename = argv[1];
+    const char *outputName = "outputs/symbol_table.txt";
 
     // check if the input file extension is .fdls
     const char *ext = strrchr(inputFileName, '.'); 
