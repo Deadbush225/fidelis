@@ -398,9 +398,11 @@ Token getNextToken(FILE *source, FILE *transition) {
         }
 
         // Record the initial STATE_START once the first token byte is encountered
-        if (token.transitions[0] == '\0') {
-            appendTransition(&token, STATE_START);
-        }
+        // if (token.transitions[0] == '\0') {
+        //     printf("Consumed \e[0;35m  \e[0m to lexeme. Current lexeme is \e[0;35m%-40s\e[0m | Current token: \e[0;35mSTATE_START\e[0m\n", "");
+        //     fprintf(transition, "Consumed    to lexeme. Current lexeme is %-40s | Current token: STATE_START\n", "");
+        //     appendTransition(&token, STATE_START);
+        // }
 
         LexerState prevState = state; // Track current state to detect transitions after switch
 
@@ -409,6 +411,10 @@ Token getNextToken(FILE *source, FILE *transition) {
             // START STATE: Initial character dispatch
             // ================================================================
             case STATE_START: {
+                appendTransition(&token, STATE_START);
+                printf("Started scanning token. Current lexeme is \e[0;35m%-40s\e[0m | Current token: \e[0;35mSTATE_START\e[0m\n", "");
+                fprintf(transition, "Started scanning token. Current lexeme is %-40s | Current token: STATE_START\n", "");
+
                 if (isspace(c)) {
                     continue;
                 } else if (isdigit(c)) { // ---- NUMBERS ----
@@ -613,31 +619,32 @@ Token getNextToken(FILE *source, FILE *transition) {
                 switch (c) {
                     case '/':
                         state = STATE_IN_LINE_COMMENT;
+                        // Restore the initial '/' that was cleared, then consume the new '/'
                         token.lexeme[0] = '/';
-                        token.lexeme[1] = '/';
-                        lexemeIdx = 2;
+                        lexemeIdx = 1;
+                        CONSUME_CHAR(c);
                         break;
                     case '*':
                         state = STATE_IN_BLOCK_COMMENT;
+                        // Restore the initial '/' that was cleared, then consume the '*'
                         token.lexeme[0] = '/';
-                        token.lexeme[1] = '*';
-                        lexemeIdx = 2;
+                        lexemeIdx = 1;
+                        CONSUME_CHAR(c);
                         break;
                     case '=':
-                        // lexemeIdx was reset to 0 for comment content, so rebuild
-                        // the whole operator instead of appending to it.
-                        token.type = TOKEN_SLASH_ASSIGN;
+                        // Restore the initial '/' that was cleared, then consume the '='
                         token.lexeme[0] = '/';
-                        token.lexeme[1] = '=';
-                        token.lexeme[2] = '\0';
-                        lexemeIdx = 0;
-                        state = STATE_DONE;
+                        lexemeIdx = 1;
+                        CONSUME_CHAR(c);
+                        ACCEPT_LEXEME(TOKEN_SLASH_ASSIGN);
                         break;
                     default:
                         ungetc(c, source);
-                        token.type = TOKEN_SLASH;
-                        token.lexeme[1] = '\0';
-                        state = STATE_DONE;
+                        // Restore the initial '/' that was cleared, then accept
+                        token.lexeme[0] = '/';
+                        lexemeIdx = 1;
+                        ACCEPT_LEXEME(TOKEN_SLASH);
+                        break;
                 }
                 break;
 

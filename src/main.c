@@ -83,7 +83,7 @@ int main(int argc, char *argv[]) {
 
         // Output each token and its DFA state transition path to terminal and output file
         // printf("%-20s | %-20s | %s\n", tokenType, lexeme, t.transitions);
-        fprintf(output, "%-32s | %-20s | %s\n", tokenType, lexeme, t.transitions);
+        fprintf(output, "%-32s | %-50s | %s\n", tokenType, lexeme, t.transitions);
         free(lexeme);
     } while (t.type != TOKEN_EOF);
     
