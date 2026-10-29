@@ -1,25 +1,31 @@
 /*
  * Inventory and order desk
- * A small terminal workflow for signing in staff, adjusting stock, and
- * checking out an order. The sample intentionally exercises nested blocks,
- * literals, operators, comments, and malformed input for lexer testing.
+ * Demonstrates sign-in, reactive stock, stock adjustment, checkout,
+ * functions, input validation, and state transitions
  */
 
-// Shared inventory data
 int employeePin = 4721;
 int orderNumber = 8042;
-[string] productNames = ["Coffee", "Tea", "Cocoa"];
-[int] stockLevels = [18, 7, 0];
-[float] unitPrices = [12.50, 8.25, 15.00];
+int coffeeStock = 18;
+int teaStock = 7;
+int cocoaStock = 0;
+float coffeePrice = 12.50;
+float teaPrice = 8.25;
+float cocoaPrice = 15.00;
 float taxRate = 0.0825;
 float discountRate = 0.10;
 bool storeOpen = true;
-char shelfZone = 'B';
-char lineBreak = '\n';
-string registerName = "North \"Market\" register";
 
-react (stockLevels) {
-    print("[STOCK] Inventory changed; refresh the product display.");
+react (coffeeStock) {
+    print("[STOCK] Coffee inventory changed.");
+}
+
+react (teaStock) {
+    print("[STOCK] Tea inventory changed.");
+}
+
+react (cocoaStock) {
+    print("[STOCK] Cocoa inventory changed.");
 }
 
 fn calculateTotal(float unitPrice, int quantity) -> float {
@@ -29,10 +35,6 @@ fn calculateTotal(float unitPrice, int quantity) -> float {
     return taxedTotal;
 }
 
-fn normalizeName(string value) -> string {
-    return replace(value, " ", "");
-}
-
 fn stockLabel(int quantity) -> string {
     if (quantity == 0) {
         return "OUT OF STOCK";
@@ -40,6 +42,16 @@ fn stockLabel(int quantity) -> string {
         return "LOW STOCK";
     } else {
         return "AVAILABLE";
+    }
+}
+
+fn clampStock(int quantity) -> int {
+    if (quantity < 0) {
+        return 0;
+    } else if (quantity > 999) {
+        return 999;
+    } else {
+        return quantity;
     }
 }
 
@@ -53,7 +65,7 @@ state SignIn {
     }
 
     if (pin == employeePin && storeOpen) {
-        print("Welcome to " + registerName + ".");
+        print("Welcome to the inventory desk.");
         transition to Inventory;
     } else {
         print("Sign-in failed or the store is closed.");
@@ -62,121 +74,154 @@ state SignIn {
 }
 
 state Inventory {
-    print("\n--- INVENTORY ---");
-    for (int i = 0; i < length(productNames); i += 1) {
-        string label = stockLabel(stockLevels[i]);
-        print(productNames[i] + ": " + label + " (" + stockLevels[i] + ")");
-    }
+    print("--- INVENTORY ---");
+    print("Coffee: " + stockLabel(coffeeStock) + " (" + coffeeStock + ")");
+    print("Tea: " + stockLabel(teaStock) + " (" + teaStock + ")");
+    print("Cocoa: " + stockLabel(cocoaStock) + " (" + cocoaStock + ")");
+    print("1: Adjust stock  2: New order  3: Close register");
 
-    loop {
-        print("\n1: Adjust stock  2: New order  3: Close register");
-        string action = readLine();
-
-        match action {
-            "1" -> transition to StockAdjustment;
-            "2" -> transition to Checkout;
-            "3" -> transition to SignIn;
-            ""  -> print("Please choose an action.");
-            _   -> print("Unknown action.");
+    string action = readLine();
+    match action {
+        "1" -> transition to StockAdjustment;
+        "2" -> transition to Checkout;
+        "3" -> transition to CloseRegister;
+        _ -> {
+            print("Unknown action.");
+            transition to Inventory;
         }
     }
 }
 
 state StockAdjustment {
-    print("Product number (0-2):");
-    int? productInput = readInt();
-    int productIndex = ensure productInput else {
-        print("Product number must be an integer.");
-        transition to StockAdjustment;
+    print("Product number: 1 Coffee, 2 Tea, 3 Cocoa");
+    string product = readLine();
+    match product {
+        "1" -> transition to AdjustCoffee;
+        "2" -> transition to AdjustTea;
+        "3" -> transition to AdjustCocoa;
+        _ -> {
+            print("Unknown product.");
+            transition to Inventory;
+        }
     }
+}
 
-    if (productIndex < 0 || productIndex >= length(stockLevels)) {
-        print("No product exists at that number.");
-        transition to Inventory;
+state AdjustCoffee {
+    print("Stock change (negative values remove stock):");
+    int? changeInput = readInt();
+    int change = ensure changeInput else {
+        print("Stock change must be an integer.");
+        transition to AdjustCoffee;
     }
+    coffeeStock = clampStock(coffeeStock + change);
+    print("Coffee stock is now " + coffeeStock);
+    transition to Inventory;
+}
 
-    print("Quantity change (negative values remove stock):");
-    int? quantityInput = readInt();
-    int quantityChange = ensure quantityInput else {
-        print("Quantity must be an integer.");
-        transition to StockAdjustment;
+state AdjustTea {
+    print("Stock change (negative values remove stock):");
+    int? changeInput = readInt();
+    int change = ensure changeInput else {
+        print("Stock change must be an integer.");
+        transition to AdjustTea;
     }
+    teaStock = clampStock(teaStock + change);
+    print("Tea stock is now " + teaStock);
+    transition to Inventory;
+}
 
-    stockLevels[productIndex] += quantityChange;
-    if (stockLevels[productIndex] < 0) {
-        stockLevels[productIndex] = 0;
-    } else if (stockLevels[productIndex] > 999) {
-        stockLevels[productIndex] = 999;
+state AdjustCocoa {
+    print("Stock change (negative values remove stock):");
+    int? changeInput = readInt();
+    int change = ensure changeInput else {
+        print("Stock change must be an integer.");
+        transition to AdjustCocoa;
     }
-
-    print("Updated " + productNames[productIndex] + ": "
-        + stockLevels[productIndex]);
+    cocoaStock = clampStock(cocoaStock + change);
+    print("Cocoa stock is now " + cocoaStock);
     transition to Inventory;
 }
 
 state Checkout {
-    print("Product number:");
-    int? productInput = readInt();
-    int productIndex = ensure productInput else {
-        print("Product number must be an integer.");
-        transition to Checkout;
-    }
-
-    if (productIndex < 0 || productIndex >= length(productNames)) {
-        print("Unknown product.");
-        transition to Inventory;
-    } else if (stockLevels[productIndex] == 0) {
-        print(productNames[productIndex] + " is out of stock.");
-        transition to Inventory;
-    } else {
-        print("Quantity:");
-        int? quantityInput = readInt();
-        int quantity = ensure quantityInput else {
-            print("Quantity must be an integer.");
-            transition to Checkout;
-        }
-
-        if (quantity <= 0 || quantity > stockLevels[productIndex]) {
-            print("Quantity is outside the available stock.");
-            transition to Inventory;
-        } else {
-            float total = calculateTotal(unitPrices[productIndex], quantity);
-            stockLevels[productIndex] -= quantity;
-            orderNumber += 1;
-            print("Order " + orderNumber + " total: $" + total);
+    print("Product number: 1 Coffee, 2 Tea, 3 Cocoa");
+    string product = readLine();
+    match product {
+        "1" -> transition to CheckoutCoffee;
+        "2" -> transition to CheckoutTea;
+        "3" -> transition to CheckoutCocoa;
+        _ -> {
+            print("Unknown product.");
             transition to Inventory;
         }
     }
 }
 
-// Operator, nesting, and literal edge cases kept together for token inspection.
-int arithmeticProbe = ((orderNumber + 5) * 3) / 2 % 7;
-int integerDivisionProbe = 19 \ 4;
-int exponentProbe = 2 ^ 8;
-bool comparisonProbe = (arithmeticProbe != 0) && (stockLevels[0] >= 0);
-bool fallbackProbe = !(storeOpen == false) || comparisonProbe;
-int updateProbe = 12;
-updateProbe += 3;
-updateProbe -= 1;
-updateProbe *= 2;
-updateProbe /= 7;
-updateProbe %= 5;
-float precisionProbe = 0.125;
-int negativeProbe = -42;
-string emptyText = "";
-char characterProbe = 'Q';
-string pipelineProbe = registerName |> normalizeName();
+state CheckoutCoffee {
+    print("Quantity:");
+    int? quantityInput = readInt();
+    int quantity = ensure quantityInput else {
+        print("Quantity must be an integer.");
+        transition to CheckoutCoffee;
+    }
+    if (quantity <= 0) {
+        print("Quantity must be greater than zero.");
+        transition to Inventory;
+    } else if (quantity > coffeeStock) {
+        print("Quantity exceeds available coffee stock.");
+        transition to Inventory;
+    } else {
+        float total = calculateTotal(coffeePrice, quantity);
+        coffeeStock -= quantity;
+        orderNumber += 1;
+        print("Order " + orderNumber + " total: $" + total);
+        transition to Inventory;
+    }
+}
 
-// Delimiters below are intentionally mismatched. The lexer should emit the
-// bracket tokens; detecting the unmatched '[' is a parser responsibility.
-print(productNames[0);
+state CheckoutTea {
+    print("Quantity:");
+    int? quantityInput = readInt();
+    int quantity = ensure quantityInput else {
+        print("Quantity must be an integer.");
+        transition to CheckoutTea;
+    }
+    if (quantity <= 0) {
+        print("Quantity must be greater than zero.");
+        transition to Inventory;
+    } else if (quantity > teaStock) {
+        print("Quantity exceeds available tea stock.");
+        transition to Inventory;
+    } else {
+        float total = calculateTotal(teaPrice, quantity);
+        teaStock -= quantity;
+        orderNumber += 1;
+        print("Order " + orderNumber + " total: $" + total);
+        transition to Inventory;
+    }
+}
 
-// Recoverable lexical errors: each should produce TOKEN_ERROR as appropriate.
-@
-#
-1stPlace
-thisIdentifierNameIsDefinitelyLongerThanThirtyTwoCharacters
-char invalidCharacter = 'AB';
+state CheckoutCocoa {
+    print("Quantity:");
+    int? quantityInput = readInt();
+    int quantity = ensure quantityInput else {
+        print("Quantity must be an integer.");
+        transition to CheckoutCocoa;
+    }
+    if (quantity <= 0) {
+        print("Quantity must be greater than zero.");
+        transition to Inventory;
+    } else if (quantity > cocoaStock) {
+        print("Quantity exceeds available cocoa stock.");
+        transition to Inventory;
+    } else {
+        float total = calculateTotal(cocoaPrice, quantity);
+        cocoaStock -= quantity;
+        orderNumber += 1;
+        print("Order " + orderNumber + " total: $" + total);
+        transition to Inventory;
+    }
+}
 
-// Keep the unterminated string last: scanning it reaches the end of the file.
-string unterminatedText = "This string never closes
+state CloseRegister {
+    print("Register closed.");
+}
