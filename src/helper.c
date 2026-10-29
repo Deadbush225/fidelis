@@ -76,7 +76,7 @@ char* escapeCharacter(char c) {
             return "\\r";
         case '\\':
             return "\\\\";
-        default:
+        default: {
             char* str = malloc(2);
             if (str == NULL) {
                 return NULL;
@@ -84,5 +84,6 @@ char* escapeCharacter(char c) {
             str[0] = c;
             str[1] = '\0';
             return str;
+        }
     }
 }
