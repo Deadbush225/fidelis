@@ -47,10 +47,14 @@ int main(int argc, char *argv[]) {
     }
     
     /* ━━━━━━━━━━━━━━━━━━━━━━━ Lexical Processing ━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-    printf("Processing File: %s\n", filename);
+    printf("Processing File: %s\n\n", filename);
 
-    fprintf(output, "     TOKEN TYPE      |        LEXEME       \n");
-    fprintf(output, "=====================|=====================\n");
+    // Print 3-column table header (Token Type, Lexeme, and State Transitions) to terminal and file
+    printf("     TOKEN TYPE      |        LEXEME        |          STATE TRANSITIONS          \n");
+    printf("=====================|======================|========================================\n");
+
+    fprintf(output, "     TOKEN TYPE      |        LEXEME        |          STATE TRANSITIONS          \n");
+    fprintf(output, "=====================|======================|========================================\n");
 
     Token t;
     do {
@@ -65,11 +69,13 @@ int main(int argc, char *argv[]) {
             return 1;
         }
 
-        fprintf(output, "%-20s | %s\n" , tokenType, lexeme);
+        // Output each token and its DFA state transition path to terminal and output file
+        printf("%-20s | %-20s | %s\n", tokenType, lexeme, t.transitions);
+        fprintf(output, "%-20s | %-20s | %s\n", tokenType, lexeme, t.transitions);
         free(lexeme);
     } while (t.type != TOKEN_EOF);
     
-    printf("Lexical analysis complete.\n");
+    printf("\nLexical analysis complete.\n");
     printf("Output written to: %s\n", outputName);
 
     fclose(file);
