@@ -416,9 +416,9 @@ protected by the compiler and cannot be used as variable identifiers.
 
 Noise words are optional terms injected into the syntax solely to
 enhance human readability. They hold no semantic or structural value.
-The lexical analyzer systematically discards these tokens during the
-tokenization phase, meaning the parser never processes them and they
-have zero impact on the program's execution logic.
+The lexer returns these words as `TOKEN_NOISE_WORD`; it does not discard
+them. A caller or later parser stage must filter this token type if noise
+words are to be ignored.
 
 Defined Noise Words:
 
@@ -428,13 +428,13 @@ Defined Noise Words:
 
 - **to**
 
-Because noise words are discarded, the parser evaluates statements
-exactly the same whether the programmer includes them or not. This
-allows developers to write code that reads closer to natural English
-without complicating the grammar rules of the compiler.
+When `TOKEN_NOISE_WORD` tokens are filtered, statements evaluate the same
+whether these words are included or not. This allows developers to write
+code that reads closer to natural English without complicating the grammar
+rules of the compiler.
 
-  ------------------------------------ ---------------------------------
-     **Programmer Input (With Noise           **Equivalent Code**
+  ------------------------------------ ----------------------------------------
+     **Programmer Input (With Noise           **Equivalent After Filtering**
                 Words)**               
 
        int roomTemp **is** = 22;              int roomTemp = 22;
@@ -442,7 +442,7 @@ without complicating the grammar rules of the compiler.
     state Dashboard **do** { \... }        state Dashboard { \... }
 
       transition **to** Dashboard;           transition Dashboard;
-  ------------------------------------ ---------------------------------
+  ------------------------------------ ----------------------------------------
 
 
 ### Comments

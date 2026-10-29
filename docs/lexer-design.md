@@ -80,7 +80,7 @@ The keyword DFA uses helper macros in `lexer.c`:
 - `CONSUME_CHAR` appends one character while keeping the lexeme inside its
   buffer.
 
-The noise words `is`, `then`, `do`, and `to` are returned as
+The noise words `is`, `do`, and `to` are returned as
 `TOKEN_NOISE_WORD`. The lexer does not discard them; a caller that wants to
 ignore noise words must filter that token type.
 
