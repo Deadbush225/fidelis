@@ -1153,9 +1153,7 @@ Token getNextToken(FILE *source, FILE *transition) {
                     if (lexemeIdx < 255) { CONSUME_CHAR(c); }
                 } else {
                     ungetc(c, source);
-                    token.lexeme[lexemeIdx] = '\0';
-                    token.type = (lexemeIdx > 32) ? TOKEN_ERR_IDENTIFIER_TOO_LONG : TOKEN_IDENTIFIER;
-                    state = STATE_DONE;
+                    ACCEPT_LEXEME((lexemeIdx > 32) ? TOKEN_ERR_IDENTIFIER_TOO_LONG : TOKEN_IDENTIFIER);
                 }
                 break;
 
@@ -1173,11 +1171,6 @@ Token getNextToken(FILE *source, FILE *transition) {
                 break;
         }
     }
-
-    if (token.type == TOKEN_IDENTIFIER && strlen(token.lexeme) > 32) {
-        token.type = TOKEN_ERR_IDENTIFIER_TOO_LONG;
-    }
-
 
     printf("=======================================================================================================================\n");
     fprintf(transition, "=======================================================================================================================\n");
