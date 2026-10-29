@@ -88,6 +88,7 @@ typedef enum {
     TOKEN_PIPELINE,  // |>
     TOKEN_ARROW,     // ->
     TOKEN_QUESTION,  // ?  (optional-type suffix)
+    TOKEN_DOT, // . (intrinsic property operator)
 
     // ---- Delimiters ----
     TOKEN_SEMICOLON,
