@@ -14,19 +14,23 @@ demo program in `src/main.c` repeatedly requests tokens and prints them.
 
 ## Token interface
 
-`getNextToken(FILE *source)` returns one `Token` at a time. A token contains:
+`getNextToken(FILE *source, FILE *transition)` returns one `Token` at a time.
+A token contains:
 
 - `type`: a `TokenType` enum value.
 - `lexeme`: a null-terminated character array with capacity for 255
   characters plus the terminator.
+- `transitions`: a null-terminated string containing the DFA state path for
+  this token, with capacity for 511 characters plus the terminator.
 
 The token types are grouped in `lexer.h` as literals, keywords, operators,
 delimiters, brackets, comments, and the special `TOKEN_EOF` and `TOKEN_ERROR`
-types. `getTokenTypeName()` provides printable names, and `printToken()` writes
-the type and lexeme to standard output.
+types. `getTokenTypeName()` maps a token type to its printable name.
 
-The caller owns the input stream and is responsible for closing it. The caller
-can continue calling `getNextToken()` until it receives `TOKEN_EOF`.
+The caller supplies the input stream and a writable transition-log stream.
+`getNextToken()` writes detailed scanning messages to standard output and to
+the transition-log stream. The caller owns both streams and is responsible for
+closing them. Continue calling `getNextToken()` until it returns `TOKEN_EOF`.
 
 ## Scanning model
 
@@ -45,6 +49,12 @@ At the start state, the lexer:
 For tokens that need to inspect one character beyond their end, the lexer uses
 `ungetc()` to return that character to the stream. The next call can then
 process it as the start of the next token.
+
+For each token, the lexer records the DFA states it visits in
+`Token.transitions`, starting at `STATE_START` and appending a state when the
+scanner changes state. Leading whitespace is skipped without being included in
+the path. The lexer also writes per-character consumption and token
+acceptance/error messages to standard output and the supplied transition log.
 
 ### Identifiers and keywords
 
@@ -115,9 +125,10 @@ with a fixed "Unterminated string" diagnostic.
 
 Single-quoted input is scanned as a character literal. The current
 implementation accepts exactly one source character between the quotes, such
-as `'A'`. It does not accept backslash escapes: a spelling such as `'\n'` or
-`'\''` is reported as `TOKEN_ERROR` with the lexeme "Char literal too long".
-An empty literal produces `TOKEN_ERROR` with the lexeme "Empty char literal",
+as `'A'`. It does not interpret backslash escapes; for example, `'\n'` is
+reported as `TOKEN_ERROR` with the lexeme "Char literal too long". An escaped
+quote is treated as a closing quote rather than as character content. An
+empty literal produces `TOKEN_ERROR` with the lexeme "Empty char literal",
 and a missing closing quote or a newline before the closing quote produces
 `TOKEN_ERROR` with "Unterminated char".
 
@@ -165,6 +176,8 @@ decides whether to print, preserve, or ignore them.
   truncated instead of writing past the buffer. Truncation is silent for
   literals and comments; identifiers longer than 32 characters instead
   produce `TOKEN_ERROR` (their lexeme is still limited to 255 bytes).
+- `Token.transitions` has a fixed capacity of 512 bytes. If a state path is too
+  long to fit, additional state names are silently omitted.
 - Tokens do not carry source line or column locations.
 - `TOKEN_ERROR` lexemes are not a uniform diagnostic format: some error paths
   retain the scanned source text, while others use a fixed message. Errors do
@@ -178,13 +191,16 @@ decides whether to print, preserve, or ignore them.
 
 ## Trying the lexer
 
-Build with `make`, then pass a sample source file to the executable:
+Build with the Windows helper script, then pass a `.fdls` source file:
 
-```sh
-make
-./fidelis samples/test_features.swift
+```powershell
+.\compile.cmd
+.\fidelis.exe samples\test_features.fdls
 ```
 
-The sample files demonstrate valid tokenization and selected lexical errors.
-For example, unsupported characters produce `TOKEN_ERROR`; malformed
-identifier-like text demonstrates token boundaries, not parser validation.
+The demo requires an input-file argument. It writes the token table, including
+each token's state path, to `outputs/symbol_table.txt` and detailed scanner
+messages to `outputs/transition_trace.txt`. The sample files demonstrate
+tokenization and selected lexical errors. For example, unsupported characters
+produce `TOKEN_ERROR`; malformed identifier-like text demonstrates token
+boundaries, not parser validation.
