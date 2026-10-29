@@ -1,0 +1,20 @@
+//Scans an integer array to find both the smallest and largest values.
+[int] scores = [67, 6, 7, 9, 6, 96, 99]
+int totalItems = scores.length;
+
+int minimum = scores[0];
+int maximum = scores[0];
+
+for (int i = 1; i < totalItems; i += 1) {
+  if (scores[i] < minimum) {
+    minimum = scores[i];
+  }
+
+  if (scores[i] > maximum) {
+    maximum = scores[i];
+  }
+}
+
+print("Total elements: " + totalItems);
+print("Minimum score: " + minimum);
+print("Maximum score: " + maximum);
