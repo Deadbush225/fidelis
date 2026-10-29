@@ -55,6 +55,9 @@ For each token, the lexer records the DFA states it visits in
 scanner changes state. Leading whitespace is skipped without being included in
 the path. The lexer also writes per-character consumption and token
 acceptance/error messages to standard output and the supplied transition log.
+The `STATE_IN_FLOAT_DOT` state is not currently named in the state-name
+mapping, so it appears as `STATE_UNKNOWN` in transition traces (for example,
+the trace for `42.`).
 
 ### Identifiers and keywords
 
@@ -118,19 +121,26 @@ leading decimal point as a float, exponent notation, or validate numeric range.
 Double-quoted input is scanned as a string until the next unescaped double
 quote. A backslash keeps the following byte inside the string, so `"a\"b"` is a
 single `TOKEN_STRING_LITERAL`. Escapes are preserved verbatim in the lexeme;
-the lexer does not decode them. An unescaped newline, carriage return, or
-end-of-file before the closing quote produces `TOKEN_ERR_UNTERMINATED_STRING`.
-For an unterminated string, the lexeme contains the source text scanned so far.
+the lexer does not decode them. A backslash also causes a following newline or
+carriage return to be consumed as string content. An unescaped newline,
+carriage return, or end-of-file before the closing quote produces
+`TOKEN_ERR_UNTERMINATED_STRING`. If EOF immediately follows a backslash, the
+lexer attempts to append the EOF value to the lexeme before reporting the
+unterminated string.
 
 Single-quoted input is scanned as a character literal. The current
 implementation accepts exactly one source character between the quotes, such
-as `'A'`. A missing closing quote or a newline or carriage return before the
-closing quote produces `TOKEN_ERR_UNTERMINATED_CHAR`. Empty literals produce
-`TOKEN_ERR_EMPTY_CHAR`; literals with too much content produce
-`TOKEN_ERR_CHAR_TOO_LONG`. A backslash is not interpreted as an escape
-character, so `'\n'` produces `TOKEN_ERR_CHAR_TOO_LONG`. The lexer treats a
-quote following a backslash as a closing quote, not as escaped character
-content.
+as `'A'`. It checks the accumulated content length before checking whether the
+current character is a closing quote or a line ending. Once two content
+characters have accumulated, it emits `TOKEN_ERR_CHAR_TOO_LONG` and consumes
+input through the next single quote, newline, carriage return, or EOF for
+recovery. This check takes precedence over unterminated-character detection:
+for example, two content characters followed by EOF still produce
+`TOKEN_ERR_CHAR_TOO_LONG`, while one content character followed by EOF
+produces `TOKEN_ERR_UNTERMINATED_CHAR`. Empty literals produce
+`TOKEN_ERR_EMPTY_CHAR`. A backslash is not interpreted as an escape character,
+so `'\n'` produces `TOKEN_ERR_CHAR_TOO_LONG`. A quote following a backslash is
+treated as the closing quote, not as escaped character content.
 
 ### Error tokens
 
@@ -144,8 +154,8 @@ are:
 | `TOKEN_ERR_INVALID_NUMBER` | `ERR_INVALID_NUMBER` | A number is joined to identifier characters, or a float contains letters, underscores, or additional dots. |
 | `TOKEN_ERR_MALFORMED_FLOAT` | `ERR_MALFORMED_FLOAT` | A decimal point after digits is not followed by a digit, as in `42.`. |
 | `TOKEN_ERR_UNTERMINATED_STRING` | `ERR_UNTERMINATED_STRING` | A string reaches EOF or an unescaped newline or carriage return before its closing quote. |
-| `TOKEN_ERR_UNTERMINATED_CHAR` | `ERR_UNTERMINATED_CHAR` | A character literal reaches EOF, newline, or carriage return before its closing quote. |
-| `TOKEN_ERR_CHAR_TOO_LONG` | `ERR_CHAR_TOO_LONG` | A character literal contains more content than the scanner permits. |
+| `TOKEN_ERR_UNTERMINATED_CHAR` | `ERR_UNTERMINATED_CHAR` | A character literal reaches EOF, newline, or carriage return before its closing quote, before two content characters have accumulated. |
+| `TOKEN_ERR_CHAR_TOO_LONG` | `ERR_CHAR_TOO_LONG` | Two content characters have accumulated before the closing quote is processed. |
 | `TOKEN_ERR_EMPTY_CHAR` | `ERR_EMPTY_CHAR` | An empty character literal, `''`, is encountered. |
 | `TOKEN_ERR_INVALID_OPERATOR` | `ERR_INVALID_OPERATOR` | `&` is not followed by `&`, or `|` is not followed by `|` or `>`. |
 | `TOKEN_ERR_IDENTIFIER_TOO_LONG` | `ERR_IDENTIFIER_TOO_LONG` | An identifier exceeds 32 characters. |
@@ -177,18 +187,21 @@ Examples include:
 | `\` | `TOKEN_BACKSLASH` |
 | `?` | `TOKEN_QUESTION` (optional-type suffix) |
 | `.` | `TOKEN_DOT` (intrinsic property operator) |
+| `;`, `,`, `:` | `TOKEN_SEMICOLON`, `TOKEN_COMMA`, `TOKEN_COLON` |
+| `(`, `)`, `{`, `}`, `[`, `]` | Corresponding left/right parenthesis, brace, and bracket tokens |
+
 The lexer also recognizes `/=` as `TOKEN_SLASH_ASSIGN` and accepts `\` and `^`
-as standalone operators in addition to the punctuation and bracket tokens above.
-A single `&` or a `|` not followed by `|` or `>` produces
-`TOKEN_ERR_INVALID_OPERATOR`. Characters that are not part of a recognized
-token, such as `@`, produce `TOKEN_ERR_UNRECOGNIZED`.
+as standalone operators. A single `&` or a `|` not followed by `|` or `>`
+produces `TOKEN_ERR_INVALID_OPERATOR`. Characters that are not part of a
+recognized token, such as `@`, produce `TOKEN_ERR_UNRECOGNIZED`.
 
 ### Comments
 
 `//` starts a line comment and `/*` starts a block comment. Block comments end
 at the first `*/`; reaching end-of-file before that returns
 `TOKEN_ERR_UNTERMINATED_BLOCK_COMMENT`.
-Line comments stop at the newline or end-of-file.
+Line comments stop at line feed or end-of-file; a carriage return is included
+in the comment lexeme and does not end the comment.
 
 Comments are currently returned as `TOKEN_LINE_COMMENT` and
 `TOKEN_BLOCK_COMMENT`. They are not discarded by `getNextToken()`; the caller
@@ -204,11 +217,12 @@ decides whether to print, preserve, or ignore them.
   255 bytes).
 - `Token.transitions` has a fixed capacity of 512 bytes. If a state path is too
   long to fit, additional state names are silently omitted.
+- `STATE_IN_FLOAT_DOT` currently appears as `STATE_UNKNOWN` in transition
+  traces because it is missing from the state-name mapping.
 - Tokens do not carry source line or column locations.
-- Error lexemes are not a uniform diagnostic format: some error paths retain
-  the scanned source text, while others use a fixed message. Errors do not
-  include structured diagnostics or source locations, and recovery from a
-  malformed construct is limited.
+- Error lexemes contain the source text accumulated when the error is detected;
+  they are not structured diagnostics and do not include source locations.
+  Recovery from a malformed construct is limited.
 - Numeric literals have limited lexical validation: exponents and numeric
   range are not checked, and a float requires at least one digit after its
   decimal point.
