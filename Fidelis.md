@@ -771,13 +771,13 @@ their names are not keywords or reserved words.
 
 ```text
 length(string value) -> int
-length([T] value) -> int
 ```
 
-Returns the number of elements in an array or the number of characters in a
-string. `T` represents any supported element type. The argument must be a
-non-null array or string. Array indices are zero-based, so the result is the
-first index past the end of the array.
+`length` also accepts a non-null array whose elements have any supported
+type. It returns the number of elements in an array or the number of
+characters in a string. This describes the built-in function's behavior;
+it does not use generic type parameters. Array indices are zero-based, so
+the result is the first index past the end of the array.
 
 ```fidelis
 [int] scores = [90, 85, 88];
