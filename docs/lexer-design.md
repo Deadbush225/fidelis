@@ -99,9 +99,9 @@ consumes the rest of that identifier-like sequence and emits one
 identifier). Otherwise, the first character that does not belong to the number
 is put back for the next token.
 
-The current implementation does not require a digit after the decimal point
-and does not validate numeric range. It also does not recognize a leading
-decimal point as a float.
+The current implementation requires at least one digit after the decimal
+point, so `42.` produces `TOKEN_ERROR`. It does not recognize a leading
+decimal point as a float, exponent notation, or validate numeric range.
 
 ### Strings and characters
 
@@ -113,12 +113,13 @@ end-of-file before the closing quote produces `TOKEN_ERROR`. For an unterminated
 string, the lexeme contains the source text scanned so far; it is not replaced
 with a fixed "Unterminated string" diagnostic.
 
-Single-quoted input is scanned as a character literal. A valid literal holds
-exactly one character or one backslash escape, such as `'A'`, `'\n'`, or
-`'\''`. An empty literal produces `TOKEN_ERROR` with the lexeme
-"Empty char literal", more than one character produces `TOKEN_ERROR` with
-"Char literal too long", and a missing closing quote produces `TOKEN_ERROR`
-with "Unterminated char".
+Single-quoted input is scanned as a character literal. The current
+implementation accepts exactly one source character between the quotes, such
+as `'A'`. It does not accept backslash escapes: a spelling such as `'\n'` or
+`'\''` is reported as `TOKEN_ERROR` with the lexeme "Char literal too long".
+An empty literal produces `TOKEN_ERROR` with the lexeme "Empty char literal",
+and a missing closing quote or a newline before the closing quote produces
+`TOKEN_ERROR` with "Unterminated char".
 
 ### Operators and punctuation
 
@@ -169,8 +170,9 @@ decides whether to print, preserve, or ignore them.
   retain the scanned source text, while others use a fixed message. Errors do
   not include structured diagnostics or source locations, and recovery from a
   malformed construct is limited.
-- Numeric literals are not validated: there is no exponent syntax, no range
-  check, and a float may omit digits after the decimal point.
+- Numeric literals have limited lexical validation: exponents and numeric
+  range are not checked, and a float requires at least one digit after its
+  decimal point.
 - The code is the source of truth for actual behavior. When language rules
   change, update the DFA, token definitions, examples, and tests together.
 
