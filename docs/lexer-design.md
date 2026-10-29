@@ -55,9 +55,6 @@ For each token, the lexer records the DFA states it visits in
 scanner changes state. Leading whitespace is skipped without being included in
 the path. The lexer also writes per-character consumption and token
 acceptance/error messages to standard output and the supplied transition log.
-The `STATE_IN_FLOAT_DOT` state is not currently named in the state-name
-mapping, so it appears as `STATE_UNKNOWN` in transition traces (for example,
-the trace for `42.`).
 
 ### Identifiers and keywords
 
@@ -217,8 +214,6 @@ decides whether to print, preserve, or ignore them.
   255 bytes).
 - `Token.transitions` has a fixed capacity of 512 bytes. If a state path is too
   long to fit, additional state names are silently omitted.
-- `STATE_IN_FLOAT_DOT` currently appears as `STATE_UNKNOWN` in transition
-  traces because it is missing from the state-name mapping.
 - Tokens do not carry source line or column locations.
 - Error lexemes contain the source text accumulated when the error is detected;
   they are not structured diagnostics and do not include source locations.

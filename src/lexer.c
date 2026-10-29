@@ -215,6 +215,7 @@ static const char* getStateName(LexerState state) {
         case STATE_IN_BLOCK_COMMENT_STAR:   return "STATE_IN_BLOCK_COMMENT_STAR";
 
         case STATE_IN_NUMBER:               return "STATE_IN_NUMBER";
+        case STATE_IN_FLOAT_DOT:            return "STATE_IN_FLOAT_DOT";
         case STATE_IN_FLOAT:                return "STATE_IN_FLOAT";
 
         case STATE_IN_STRING:               return "STATE_IN_STRING";
