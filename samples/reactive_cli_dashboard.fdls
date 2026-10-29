@@ -1,0 +1,128 @@
+/*
+  Reactive server monitor and deployment CLI
+  Demonstrates live terminal state updates, safe input validation,
+  reactive status panels, and command-line workflow control
+ */
+
+const int MAX_WORKERS is = 10;
+int adminCode = 2026;
+int activeWorkers = 3;
+int cpuUsage = 45;
+int requestCount = 120;
+float memoryUsage = 62.5;
+float uptimeHours = 24.0;
+char tierCode = 'A';
+bool serverOnline = true;
+bool maintenanceMode = false;
+string? lastCommand = null;
+
+[int] openPorts = [80, 443, 8080];
+[int, 3] nodeLoads = [35, 45, 55];
+
+react (cpuUsage) -> {
+    printLine("[CLI UI] CPU usage changed to " + cpuUsage + "%");
+}
+
+react (activeWorkers) -> {
+    printLine("[CLI UI] Active workers scaled to " + activeWorkers);
+}
+
+react (serverOnline) -> {
+    printLine("[CLI UI] Server online state updated.");
+}
+
+task calculateLoadPerWorker(int totalLoad, int workers) : int {
+    int baseLoad = (totalLoad \ workers) + (totalLoad % workers);
+    int overhead = 2 ^ 2;
+    return baseLoad + overhead;
+}
+
+task calculateThroughput(int requests, float hours) : float {
+    float baseRate = (requests * 1.0) / hours;
+    float adjustedRate = baseRate - 0.5;
+    return adjustedRate;
+}
+
+task healthLabel(int usage) : string {
+    if (usage == 0) do {
+        return "IDLE";
+    } else if (usage <= 50) {
+        return "HEALTHY";
+    } else if (usage >= 90) {
+        return "CRITICAL";
+    } else {
+        return "BUSY";
+    }
+}
+
+printLine("Starting Fidelis Reactive CLI...");
+sleep(1);
+
+loop (serverOnline && !maintenanceMode) do {
+    print("Admin Code: ");
+    int? enteredCode = readInt();
+
+    int code = ensure enteredCode else {
+        printLine("Admin code must be a valid integer.");
+        quit;
+    }
+
+    if (code != adminCode || !serverOnline) do {
+        printLine("Authentication failed.");
+        quit;
+    }
+
+    string modeBadge = (activeWorkers > 0) ? "LIVE" : "STANDBY";
+    string statusText = cpuUsage |> healthLabel;
+    float throughput = calculateThroughput(requestCount, uptimeHours);
+
+    printLine("--- SERVER DASHBOARD (" + modeBadge + ") ---");
+    print("Tier ");
+    printLine(tierCode);
+    printLine("Status: " + statusText + " | Throughput: " + throughput);
+
+    for (int i = 0 to i < 3; i += 1) do {
+        printLine("Node " + i + " Load: " + nodeLoads[i] + "%");
+    }
+
+    print("CLI Command (scale / deploy / shutdown): ");
+    string? rawInput = readLine();
+
+    string command = ensure rawInput else {
+        printLine("Command cannot be empty.");
+        quit;
+    }
+
+    lastCommand = command;
+
+    if (command == "scale") {
+        print("New worker count: ");
+        int? rawWorkers = readInt();
+
+        int workers = ensure rawWorkers else {
+            printLine("Worker count must be an integer.");
+            quit;
+        }
+
+        if (workers < 1 || workers > MAX_WORKERS) {
+            printLine("Worker count out of allowed range.");
+        } else {
+            activeWorkers = workers;
+            cpuUsage = calculateLoadPerWorker(cpuUsage, activeWorkers);
+            requestCount += 25;
+            memoryUsage *= 1.1;
+            memoryUsage /= 1.0;
+            requestCount %= 1000;
+        }
+    } else if (command == "deploy") {
+        cpuUsage += 15;
+        cpuUsage -= 5;
+        uptimeHours += 1.0;
+        printLine("Deployment complete.");
+    } else if (command == "shutdown") {
+        serverOnline = false;
+        printLine("Server CLI stopped.");
+        quit;
+    }
+}
+
