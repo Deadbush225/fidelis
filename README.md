@@ -273,7 +273,7 @@ See `Fidelis.md` for the full language specification and examples.
 To test the lexer on the bundled sample source:
 
 ```bash
-./fidelis samples/test_features.swift
+./fidelis samples/test_features.fdls
 ```
 
 ## Notes
