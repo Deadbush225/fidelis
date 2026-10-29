@@ -23,10 +23,6 @@ fn formatStatus(bool status) -> string {
     return (status == true) ? "ACTIVE" : "INACTIVE";
 }
 
-fn removeSpaces(string text) -> string {
-    return replace(text, " ", "");
-}
-
 // 4. ISOLATED STATES (state & transition)
 state Boot {
     print("--- SYSTEM LOCKED ---");
@@ -59,8 +55,7 @@ state Dashboard {
     loop {
         print("\nSelect an action (1-4):");
         
-        // Pipeline used purely for string manipulation
-        string choice = readLine() |> removeSpaces();
+        string choice = readLine();
         
         match choice {
             "1" -> transition to LightControl;
@@ -122,3 +117,59 @@ state StatusView {
     transition to Dashboard;
 }
 
+// 5. ADDITIONAL LANGUAGE FEATURES FROM Fidelis.md
+state LanguageFeatureShowcase {
+    // Arrays, indexing, assignment, and both length forms described in the spec.
+    [int] scores = [90, 85, 88];
+    int scoreCount = length(scores);
+    int scoreCountByProperty = scores.length;
+    scores[1] = 95;
+
+
+    // Optional primitive and array types, null, and ensure-based unwrapping.
+    int? optionalScore = null;
+    float? optionalWeight = null;
+    bool? optionalFlag = null;
+    char? optionalInitial = null;
+    string? optionalName = readLine();
+    [int]? optionalScores = null;
+
+    string confirmedName = ensure optionalName else {
+        print("No name was entered.");
+        transition to Dashboard;
+    }
+
+    // Character and string escapes are retained in the lexeme.
+    char newline = '\n';
+    string quotedText = "She said: \"hello\"";
+
+    // Arithmetic, relational, logical, and compound assignment operators.
+    int calculation = -(2 ^ 3) + 10 / 2 \ 2 % 3;
+    calculation += 1;
+    calculation -= 1;
+    calculation *= 2;
+    calculation /= 2;
+    calculation %= 5;
+
+    bool withinRange = scoreCount >= 1 && scoreCountByProperty <= 10;
+    bool differs = calculation != 0 || !withinRange;
+
+    // Nested iteration and a multi-statement match case.
+    for (int x = 1; x <= 2; x += 1) {
+        for (int y = 1; y <= 2; y += 1) {
+            print("Coordinate: (" + x + ", " + y + ")");
+        }
+    }
+
+    match confirmedName {
+        "Ada" -> {
+            print("Welcome, Ada.");
+            transition to Dashboard;
+        }
+        _ -> print("Welcome, " + confirmedName);
+    }
+}
+
+// System commands documented in Fidelis.md.
+sleep(100);
+quit;
