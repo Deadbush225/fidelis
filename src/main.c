@@ -14,12 +14,13 @@ int main(int argc, char *argv[]) {
     printf("===================== FIDELIS LEXICAL ANALYZER =====================\n");
     /* ━━━━━━━━━━━━━━━━━━━━━━━ Lexical Preprocessing ━━━━━━━━━━━━━━━━━━━━━━━━ */
 
-    const char *filename = (argc > 1) ? argv[1] : "samples/test_features.fdls";
-    const char *outputName = "outputs/symbol_table.txt";
-
     if (argc == 1) {
-        printf("\e[1;31mNo input file specified. Using default: %s \e[0m\n", filename);
+        printf("\e[1;31mNo input file specified. Please provide a .fdls file as an argument.\e[0m\n");
+        return 1;
     }
+
+    const char *filename = argv[1];
+    const char *outputName = "outputs/symbol_table.txt";
 
     // check if the input file extension is .fdls
     const char *ext = strrchr(filename, '.'); 
