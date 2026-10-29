@@ -870,7 +870,6 @@ Token getNextToken(FILE *source) {
                 switch (c) {
                     CASE_X_BRANCH_TO('a', STATE_REA);
                     CASE_X_BRANCH_TO('t', STATE_RET);
-                    CASE_X_BRANCH_TO('d', STATE_READ);
                     ELSE_CHECK_IF_POSSIBLE_IDENTIFIER();
                 }
                 break;
