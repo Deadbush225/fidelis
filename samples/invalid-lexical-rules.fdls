@@ -12,6 +12,7 @@ $
 // Rule 2: Malformed Numeric Literals / Identifier Starting with Digits
 123badVariable
 45_invalid
+42.
 3.14invalidFloat
 
 // Rule 3: Identifier Exceeding Max Length Limit (32 Characters Max)
