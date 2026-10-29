@@ -65,3 +65,24 @@ char* escapedLexeme(const char* lexeme) {
     escaped[outputIndex] = '\0';
     return escaped;
 }
+
+char* escapeCharacter(char c) {
+    switch (c) {
+        case '\n':
+            return "\\n";
+        case '\t':
+            return "\\t";
+        case '\r':
+            return "\\r";
+        case '\\':
+            return "\\\\";
+        default:
+            char* str = malloc(2);
+            if (str == NULL) {
+                return NULL;
+            }
+            str[0] = c;
+            str[1] = '\0';
+            return str;
+    }
+}

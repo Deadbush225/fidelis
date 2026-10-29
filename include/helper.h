@@ -6,5 +6,6 @@
 #include <string.h>
 
 char* escapedLexeme(const char* lexeme);
+char* escapeCharacter(char c);
 
 #endif  // LEXER_H

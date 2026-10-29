@@ -1,4 +1,5 @@
 #include "lexer.h"
+#include "helper.h"
 #include <ctype.h>
 #include <string.h>
 #include <stdlib.h>
@@ -113,6 +114,9 @@ typedef enum {
     do { \
         if (lexemeIdx < GET_MAX_LEXEME_LENGTH - 1) { \
             token.lexeme[lexemeIdx++] = (char)(ch); \
+            token.lexeme[lexemeIdx] = '\0'; /* Null-terminate after each append */\
+            printf("Consumed %-2s to lexeme. Current lexeme is \e[0;35m%-40s\e[0m | Current token: \e[0;35m%s\e[0m\n", escapeCharacter((char)(ch)), escapedLexeme(token.lexeme), getStateName(state)); \
+            fprintf(transition, "Consumed %-2s to lexeme. Current lexeme is %-40s | Current token: %s \n", escapeCharacter((char)(ch)), escapedLexeme(token.lexeme) , getStateName(state)); \
         } \
     } while (0)
 
@@ -126,6 +130,8 @@ typedef enum {
         token.lexeme[lexemeIdx] = '\0'; \
         token.type = _token; \
         state = STATE_DONE; \
+        printf("\e[0;32mAccepted Lexeme:\e[0m %s | \e[0;32mtoken type:\e[0m %s\n", escapedLexeme(token.lexeme), getTokenTypeName(token.type)); \
+        fprintf(transition, "Accepted Lexeme: %s | token type: %s\n", token.lexeme, getTokenTypeName(token.type)); \
     } while (0)
 
 // Emit a lexer error token with a fixed error message.
@@ -138,6 +144,8 @@ typedef enum {
         strcpy(token.lexeme, _str); \
         token.type = TOKEN_ERROR; \
         state = STATE_DONE; \
+        printf("\e[0;31mLexer Error:\e[0m %s | \e[0;31mtoken type:\e[0m %s\n", token.lexeme, getTokenTypeName(token.type)); \
+        fprintf(transition, "Lexer Error: %s | token type: %s\n", token.lexeme, getTokenTypeName(token.type)); \
     } while (0)
 
 // Identifier Recognizer - if it's alphanumeric, keep building an identifier 
@@ -377,7 +385,7 @@ static void appendTransition(Token *token, LexerState state) {
 // TOKEN GENERATION FUNCTIONS
 // ============================================================================
 
-Token getNextToken(FILE *source) {
+Token getNextToken(FILE *source, FILE *transition) {
     Token token;
     token.lexeme[0] = '\0';
     int lexemeIdx = 0;
@@ -386,9 +394,12 @@ Token getNextToken(FILE *source) {
     LexerState state = STATE_START;
     int c;
 
+    printf("=================================================== Scanning token... =================================================\n");
+    fprintf(transition, "=================================================== Scanning token... =================================================\n");
+    
     while (state != STATE_DONE) {
         c = fgetc(source);
-
+        
         // Skip leading whitespace between tokens without recording a state transition
         if (state == STATE_START && isspace(c)) {
             continue;
@@ -1160,6 +1171,9 @@ Token getNextToken(FILE *source) {
         token.type = TOKEN_ERROR;
     }
 
+
+    printf("=======================================================================================================================\n");
+    fprintf(transition, "=======================================================================================================================\n");
     return token;
 }
 

@@ -129,7 +129,7 @@ typedef struct {
 // LEXER FUNCTION DECLARATIONS
 // ============================================================================
 
-Token getNextToken(FILE *source);
+Token getNextToken(FILE *source, FILE *transition);
 const char* getTokenTypeName(TokenType type);
 
 #endif
