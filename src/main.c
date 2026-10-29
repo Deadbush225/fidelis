@@ -65,8 +65,8 @@ int main(int argc, char *argv[]) {
     // printf("     TOKEN TYPE      |        LEXEME        |          STATE TRANSITIONS          \n");
     // printf("=====================|======================|========================================\n");
 
-    fprintf(output, "           TOKEN TYPE            |        LEXEME        |          STATE TRANSITIONS          \n");
-    fprintf(output, "=================================|======================|========================================\n");
+    fprintf(output, "%-32s | %-50s | %-70s\n", "           TOKEN TYPE", "                    LEXEME", "                       STATE TRANSITIONS");
+    fprintf(output, "=================================|====================================================|=======================================================================\n");
 
     Token t;
     do {
@@ -81,9 +81,10 @@ int main(int argc, char *argv[]) {
             return 1;
         }
 
-        // Output each token and its DFA state transition path to terminal and output file
-        // printf("%-20s | %-20s | %s\n", tokenType, lexeme, t.transitions);
-        fprintf(output, "%-32s | %-50s | %s\n", tokenType, lexeme, t.transitions);
+        // Print perfectly wrapped columns to BOTH the terminal and the file
+        // printSymbolTableRow(stdout, tokenType, lexeme, t.transitions);
+        printSymbolTableRow(output, tokenType, lexeme, t.transitions);
+        
         free(lexeme);
     } while (t.type != TOKEN_EOF);
     

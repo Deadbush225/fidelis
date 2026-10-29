@@ -412,8 +412,8 @@ Token getNextToken(FILE *source, FILE *transition) {
             // ================================================================
             case STATE_START: {
                 appendTransition(&token, STATE_START);
-                printf("Started scanning token. Current lexeme is \e[0;35m%-40s\e[0m | Current token: \e[0;35mSTATE_START\e[0m\n", "");
-                fprintf(transition, "Started scanning token. Current lexeme is %-40s | Current token: STATE_START\n", "");
+                printf("Started scanning...    Current lexeme is \e[0;35m%-40s\e[0m | Current token: \e[0;35mSTATE_START\e[0m\n", "");
+                fprintf(transition, "Started scanning...    Current lexeme is %-40s | Current token: STATE_START\n", "");
 
                 if (isspace(c)) {
                     continue;
