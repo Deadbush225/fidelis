@@ -140,7 +140,7 @@ Examples include:
 | `^` | `TOKEN_CARET` |
 | `\` | `TOKEN_BACKSLASH` |
 | `?` | `TOKEN_QUESTION` (optional-type suffix) |
-
+| `.` | `TOKEN_DOT` (intrinsic property operator) |
 The lexer also recognizes `/=` as `TOKEN_SLASH_ASSIGN` and accepts `\` and `^`
 as standalone operators in addition to the punctuation and bracket tokens above.
 A single `&` or a `|` not followed by `|` or `>` is an error token. Characters

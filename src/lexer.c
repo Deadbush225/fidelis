@@ -294,6 +294,10 @@ Token getNextToken(FILE *source) {
                             CONSUME_CHAR(c);
                             ACCEPT_LEXEME(TOKEN_BACKSLASH);
                             break;
+                        case '.':
+                            CONSUME_CHAR(c);
+                            ACCEPT_LEXEME(TOKEN_DOT);
+                            break;
                         // ---- DELIMITERS ----
                         case ';':
                             CONSUME_CHAR(c);
@@ -1002,6 +1006,7 @@ const char* getTokenTypeName(TokenType type) {
         case TOKEN_SLASH:           return "SLASH";
         case TOKEN_PERCENT:         return "PERCENT";
         case TOKEN_BACKSLASH:       return "BACKSLASH";
+        case TOKEN_DOT:             return "DOT";
         case TOKEN_CARET:           return "CARET";
 
         case TOKEN_EQ:              return "EQ";

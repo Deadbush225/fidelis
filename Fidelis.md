@@ -114,28 +114,28 @@ Identifier Evaluation Example:
 
 This language adopts standard C-like operation symbols for all
 mathematical, relational, and logical evaluation. Formally, the
-operation symbols (*Op)* are defined as a union of six distinct lexical
-sets: ARITHMETIC, RELATIONAL, LOGICAL, ASSIGNMENT, PIPELINE, and ARROW.
+operation symbols (*Op)* are defined as a union of seven distinct lexical
+sets: ARITHMETIC, RELATIONAL, LOGICAL, ASSIGNMENT, PIPELINE, ARROW, and DOT.
 
 Let:
 
-+---------------:+:----------------------------------------------------+
 | ARITHMETIC     | = { +, -, \*, /, %, \\, \^ }                        |
-+----------------+-----------------------------------------------------+
+|----------------|-----------------------------------------------------|
 | > RELATIONAL   | = { ==, !=, \<=, \>=, \<, \> }                      |
-+----------------+-----------------------------------------------------+
+|----------------|-----------------------------------------------------|
 | > LOGICAL      | = { !, &&, \|\| }                                   |
-+----------------+-----------------------------------------------------+
+|----------------|-----------------------------------------------------|
 | > ASSIGNMENT   | = { =, +=, -=, \*=, /=, %= }                        |
-+----------------+-----------------------------------------------------+
+|----------------|-----------------------------------------------------|
 | > PIPELINE     | = { \|\> }                                          |
-+----------------+-----------------------------------------------------+
+|----------------|-----------------------------------------------------|
 | > ARROW        | = { -\> }                                           |
-+----------------+-----------------------------------------------------+
-
+|----------------|-----------------------------------------------------|
+| > DOT          | = { . }                                           |
+|----------------|-----------------------------------------------------|
 > Op = {ARITHMETIC ∪ RELATIONAL ∪ LOGICAL ∪ ASSIGNMENT ∪ PIPELINE
 >
-> ∪ ARROW}
+> ∪ ARROW ∪ DOT}
 
 #### Arithmetic
 
@@ -273,7 +273,16 @@ route control flow and manage complex state transitions.
                                based on the evaluated input.
   ---------------- ------------------------------------------------------
 
+#### Dot
+Accesses intrinsic properties or member attributes associated 
+with composite data types, such as retrieving array length.
 
+  ---------------- ------------------------------------------------------
+  **Set Element**                     **Description**
+
+        .          Accesses intrinsic member properties (e.g., array 
+                   length via `.length`)
+  ---------------- ------------------------------------------------------
 
 ### Keywords and Reserved Words
 
@@ -608,8 +617,8 @@ with standard mathematical rules, e.g., 2\^3\^2 evaluates as 2\^(3\^2)).
     **Precedence      **Operator Type**      **Symbols**     **Associativity**
        Level**                                              
 
-   **1 (Highest)**  Parentheses (Grouping)       ( )           Left-to-Right
-
+   **1 (Highest)**  Primary (Parentheses, Dot)   ( ), .        Left-to-Right
+      
         **2**              Exponent               \^           Right-to-Left
 
         **3**            Logical NOT              !            Right-to-Left

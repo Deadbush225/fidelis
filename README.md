@@ -233,6 +233,7 @@ These are recognized and filtered by the lexer; they do not appear in the token 
 - `|>` (pipeline)
 - `->` (arrow)
 - `?` (optional-type suffix)
+- `.` (intrinsic property operator)
 
 ### Delimiters and brackets
 - `;`, `,`, `:`
