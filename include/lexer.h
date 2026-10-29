@@ -112,7 +112,16 @@ typedef enum {
 
     // ---- Special ----
     TOKEN_EOF,
-    TOKEN_ERROR
+    TOKEN_ERR_UNTERMINATED_BLOCK_COMMENT,
+    TOKEN_ERR_INVALID_NUMBER,
+    TOKEN_ERR_MALFORMED_FLOAT,
+    TOKEN_ERR_UNTERMINATED_STRING,
+    TOKEN_ERR_UNTERMINATED_CHAR,
+    TOKEN_ERR_CHAR_TOO_LONG,
+    TOKEN_ERR_EMPTY_CHAR,
+    TOKEN_ERR_INVALID_OPERATOR,
+    TOKEN_ERR_IDENTIFIER_TOO_LONG,
+    TOKEN_ERR_UNRECOGNIZED
 } TokenType;
 
 // ============================================================================
