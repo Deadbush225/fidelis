@@ -786,6 +786,9 @@ Token getNextToken(FILE *source, FILE *transition) {
             // ================================================================
             case STATE_IN_CHAR:
                 if (lexemeIdx - 1 >= 2) {
+                    while (c != '\'' && c != '\n' && c != '\r' && c != EOF) {
+                        c = fgetc(source);
+                    }
                     ACCEPT_ERROR("Char literal too long");
                     break;
                 }
