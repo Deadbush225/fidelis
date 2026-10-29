@@ -24,8 +24,8 @@ A token contains:
   this token, with capacity for 511 characters plus the terminator.
 
 The token types are grouped in `lexer.h` as literals, keywords, operators,
-delimiters, brackets, comments, and the special `TOKEN_EOF` and `TOKEN_ERROR`
-types. `getTokenTypeName()` maps a token type to its printable name.
+delimiters, brackets, comments, `TOKEN_EOF`, and ten specific error types.
+`getTokenTypeName()` maps a token type to its printable name.
 
 The caller supplies the input stream and a writable transition-log stream.
 `getNextToken()` writes detailed scanning messages to standard output and to
@@ -74,9 +74,9 @@ The lexer recognizes tokens; it does not reject a whole string such as
 `user-name` as an invalid identifier. It instead emits an identifier, a minus
 operator, and another identifier, and `total sum` becomes two identifier
 tokens. A word that starts with a digit, such as `1stPlace`, is consumed as a
-whole and reported as `TOKEN_ERROR` instead of being split into a number and an
-identifier. Identifiers longer than the 32-character limit are also reported as
-`TOKEN_ERROR`.
+whole and reported as `TOKEN_ERR_INVALID_NUMBER` instead of being split into a
+number and an identifier. Identifiers longer than the 32-character limit are
+reported as `TOKEN_ERR_IDENTIFIER_TOO_LONG`.
 
 The keyword DFA uses helper macros in `lexer.c`:
 
@@ -105,13 +105,13 @@ An initial digit enters the integer state. Further digits extend the integer;
 a period switches scanning to the float state. Digits after the period extend
 the float. If a letter or underscore immediately follows the digits, the lexer
 consumes the rest of that identifier-like sequence and emits one
-`TOKEN_ERROR` (for example, `42items` is not split into an integer and an
-identifier). Otherwise, the first character that does not belong to the number
-is put back for the next token.
+`TOKEN_ERR_INVALID_NUMBER` (for example, `42items` is not split into an
+integer and an identifier). Otherwise, the first character that does not
+belong to the number is put back for the next token.
 
 The current implementation requires at least one digit after the decimal
-point, so `42.` produces `TOKEN_ERROR`. It does not recognize a leading
-decimal point as a float, exponent notation, or validate numeric range.
+point, so `42.` produces `TOKEN_ERR_MALFORMED_FLOAT`. It does not recognize a
+leading decimal point as a float, exponent notation, or validate numeric range.
 
 ### Strings and characters
 
@@ -119,18 +119,42 @@ Double-quoted input is scanned as a string until the next unescaped double
 quote. A backslash keeps the following byte inside the string, so `"a\"b"` is a
 single `TOKEN_STRING_LITERAL`. Escapes are preserved verbatim in the lexeme;
 the lexer does not decode them. An unescaped newline, carriage return, or
-end-of-file before the closing quote produces `TOKEN_ERROR`. For an unterminated
-string, the lexeme contains the source text scanned so far; it is not replaced
-with a fixed "Unterminated string" diagnostic.
+end-of-file before the closing quote produces `TOKEN_ERR_UNTERMINATED_STRING`.
+For an unterminated string, the lexeme contains the source text scanned so far.
 
 Single-quoted input is scanned as a character literal. The current
 implementation accepts exactly one source character between the quotes, such
-as `'A'`. It does not interpret backslash escapes; for example, `'\n'` is
-reported as `TOKEN_ERROR` with the lexeme "Char literal too long". An escaped
-quote is treated as a closing quote rather than as character content. An
-empty literal produces `TOKEN_ERROR` with the lexeme "Empty char literal",
-and a missing closing quote or a newline before the closing quote produces
-`TOKEN_ERROR` with "Unterminated char".
+as `'A'`. A missing closing quote or a newline or carriage return before the
+closing quote produces `TOKEN_ERR_UNTERMINATED_CHAR`. Empty literals produce
+`TOKEN_ERR_EMPTY_CHAR`; literals with too much content produce
+`TOKEN_ERR_CHAR_TOO_LONG`. A backslash is not interpreted as an escape
+character, so `'\n'` produces `TOKEN_ERR_CHAR_TOO_LONG`. The lexer treats a
+quote following a backslash as a closing quote, not as escaped character
+content.
+
+### Error tokens
+
+The lexer returns a specific error token for each of ten error categories.
+Their enum names and the corresponding names displayed in the symbol table
+are:
+
+| Token type | Display name | When it is emitted |
+| --- | --- | --- |
+| `TOKEN_ERR_UNTERMINATED_BLOCK_COMMENT` | `ERR_UNTERMINATED_BLOCK_COMMENT` | A block comment reaches EOF before `*/`. |
+| `TOKEN_ERR_INVALID_NUMBER` | `ERR_INVALID_NUMBER` | A number is joined to identifier characters, or a float contains letters, underscores, or additional dots. |
+| `TOKEN_ERR_MALFORMED_FLOAT` | `ERR_MALFORMED_FLOAT` | A decimal point after digits is not followed by a digit, as in `42.`. |
+| `TOKEN_ERR_UNTERMINATED_STRING` | `ERR_UNTERMINATED_STRING` | A string reaches EOF or an unescaped newline or carriage return before its closing quote. |
+| `TOKEN_ERR_UNTERMINATED_CHAR` | `ERR_UNTERMINATED_CHAR` | A character literal reaches EOF, newline, or carriage return before its closing quote. |
+| `TOKEN_ERR_CHAR_TOO_LONG` | `ERR_CHAR_TOO_LONG` | A character literal contains more content than the scanner permits. |
+| `TOKEN_ERR_EMPTY_CHAR` | `ERR_EMPTY_CHAR` | An empty character literal, `''`, is encountered. |
+| `TOKEN_ERR_INVALID_OPERATOR` | `ERR_INVALID_OPERATOR` | `&` is not followed by `&`, or `|` is not followed by `|` or `>`. |
+| `TOKEN_ERR_IDENTIFIER_TOO_LONG` | `ERR_IDENTIFIER_TOO_LONG` | An identifier exceeds 32 characters. |
+| `TOKEN_ERR_UNRECOGNIZED` | `ERR_UNRECOGNIZED` | A character that does not begin a recognized token is encountered. |
+
+Error tokens retain the source text accumulated in the lexeme when the lexer
+detects the error. For an overlong character literal, the lexer consumes input
+through the closing quote to recover, but does not append that remaining input
+to the error lexeme.
 
 ### Operators and punctuation
 
@@ -155,14 +179,15 @@ Examples include:
 | `.` | `TOKEN_DOT` (intrinsic property operator) |
 The lexer also recognizes `/=` as `TOKEN_SLASH_ASSIGN` and accepts `\` and `^`
 as standalone operators in addition to the punctuation and bracket tokens above.
-A single `&` or a `|` not followed by `|` or `>` is an error token. Characters
-that are not part of a recognized token, such as `@`, also produce
-`TOKEN_ERROR`.
+A single `&` or a `|` not followed by `|` or `>` produces
+`TOKEN_ERR_INVALID_OPERATOR`. Characters that are not part of a recognized
+token, such as `@`, produce `TOKEN_ERR_UNRECOGNIZED`.
 
 ### Comments
 
 `//` starts a line comment and `/*` starts a block comment. Block comments end
-at the first `*/`; reaching end-of-file before that returns `TOKEN_ERROR`.
+at the first `*/`; reaching end-of-file before that returns
+`TOKEN_ERR_UNTERMINATED_BLOCK_COMMENT`.
 Line comments stop at the newline or end-of-file.
 
 Comments are currently returned as `TOKEN_LINE_COMMENT` and
@@ -175,13 +200,14 @@ decides whether to print, preserve, or ignore them.
   `CONSUME_CHAR()` helper stops at the capacity limit, so over-long input is
   truncated instead of writing past the buffer. Truncation is silent for
   literals and comments; identifiers longer than 32 characters instead
-  produce `TOKEN_ERROR` (their lexeme is still limited to 255 bytes).
+  produce `TOKEN_ERR_IDENTIFIER_TOO_LONG` (their lexeme is still limited to
+  255 bytes).
 - `Token.transitions` has a fixed capacity of 512 bytes. If a state path is too
   long to fit, additional state names are silently omitted.
 - Tokens do not carry source line or column locations.
-- `TOKEN_ERROR` lexemes are not a uniform diagnostic format: some error paths
-  retain the scanned source text, while others use a fixed message. Errors do
-  not include structured diagnostics or source locations, and recovery from a
+- Error lexemes are not a uniform diagnostic format: some error paths retain
+  the scanned source text, while others use a fixed message. Errors do not
+  include structured diagnostics or source locations, and recovery from a
   malformed construct is limited.
 - Numeric literals have limited lexical validation: exponents and numeric
   range are not checked, and a float requires at least one digit after its
@@ -202,5 +228,5 @@ The demo requires an input-file argument. It writes the token table, including
 each token's state path, to `outputs/symbol_table.txt` and detailed scanner
 messages to `outputs/transition_trace.txt`. The sample files demonstrate
 tokenization and selected lexical errors. For example, unsupported characters
-produce `TOKEN_ERROR`; malformed identifier-like text demonstrates token
-boundaries, not parser validation.
+produce `TOKEN_ERR_UNRECOGNIZED`; malformed identifier-like text demonstrates
+token boundaries, not parser validation.
