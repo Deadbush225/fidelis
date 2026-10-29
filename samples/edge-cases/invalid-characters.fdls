@@ -1,0 +1,11 @@
+// Edge Case: Lexical Errors due to invalid symbols
+int validNumber = 100;
+
+int @price = 250;
+string #tag = "Electronics";
+float $balance = 99.95;
+bool status~ = false;
+
+string query = `SELECT * FROM table`;
+
+print("Test complete.");
