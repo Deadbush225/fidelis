@@ -91,6 +91,18 @@ typedef enum {
     // 'q' branch: quit
     STATE_Q, STATE_QU, STATE_QUI, STATE_QUIT,
 
+    // error states
+    STATE_ERR_UNTERMINATED_BLOCK_COMMENT,
+    STATE_ERR_INVALID_NUMBER,
+    STATE_ERR_MALFORMED_FLOAT,
+    STATE_ERR_UNTERMINATED_STRING,
+    STATE_ERR_UNTERMINATED_CHAR,
+    STATE_ERR_CHAR_TOO_LONG,
+    STATE_ERR_EMPTY_CHAR,
+    STATE_ERR_INVALID_OPERATOR,
+    STATE_ERR_IDENTIFIER_TOO_LONG,
+    STATE_ERR_UNRECOGNIZED,
+    
     // Standard identifier fallback
     STATE_IN_IDENTIFIER,
     STATE_DONE
@@ -116,8 +128,8 @@ typedef enum {
         if (lexemeIdx < GET_MAX_LEXEME_LENGTH - 1) { \
             token.lexeme[lexemeIdx++] = (char)(ch); \
             token.lexeme[lexemeIdx] = '\0'; /* Null-terminate after each append */\
-            printf("Consumed %-2s to lexeme. Current lexeme is \e[0;35m%-40s\e[0m | Current token: \e[0;35m%s\e[0m\n", escapeCharacter((char)(ch)), escapedLexeme(token.lexeme), getStateName(state)); \
-            fprintf(transition, "Consumed %-2s to lexeme. Current lexeme is %-40s | Current token: %s \n", escapeCharacter((char)(ch)), escapedLexeme(token.lexeme) , getStateName(state)); \
+            printf("Consumed %-2s to lexeme. Current lexeme is \e[0;35m%-40s\e[0m | Current state: \e[0;35m%s\e[0m\n", escapeCharacter((char)(ch)), escapedLexeme(token.lexeme), getStateName(state)); \
+            fprintf(transition, "Consumed %-2s to lexeme. Current lexeme is %-40s | Current state: %s \n", escapeCharacter((char)(ch)), escapedLexeme(token.lexeme) , getStateName(state)); \
         } \
     } while (0)
 
@@ -347,6 +359,17 @@ static const char* getStateName(LexerState state) {
         case STATE_QUI:                     return "STATE_QUI";
         case STATE_QUIT:                    return "STATE_QUIT";
 
+        case STATE_ERR_UNTERMINATED_BLOCK_COMMENT: return "STATE_ERR_UNTERMINATED_BLOCK_COMMENT";
+        case STATE_ERR_INVALID_NUMBER:      return "STATE_ERR_INVALID_NUMBER";
+        case STATE_ERR_MALFORMED_FLOAT:     return "STATE_ERR_MALFORMED_FLOAT";
+        case STATE_ERR_UNTERMINATED_STRING: return "STATE_ERR_UNTERMINATED_STRING";
+        case STATE_ERR_UNTERMINATED_CHAR:   return "STATE_ERR_UNTERMINATED_CHAR";
+        case STATE_ERR_CHAR_TOO_LONG:       return "STATE_ERR_CHAR_TOO_LONG";
+        case STATE_ERR_EMPTY_CHAR:          return "STATE_ERR_EMPTY_CHAR";
+        case STATE_ERR_INVALID_OPERATOR:    return "STATE_ERR_INVALID_OPERATOR";
+        case STATE_ERR_IDENTIFIER_TOO_LONG: return "STATE_ERR_IDENTIFIER_TOO_LONG";
+        case STATE_ERR_UNRECOGNIZED:        return "STATE_ERR_UNRECOGNIZED";        
+
         case STATE_IN_IDENTIFIER:           return "STATE_IN_IDENTIFIER";
         case STATE_DONE:                    return "STATE_DONE";
         default:                            return "STATE_UNKNOWN";
@@ -413,8 +436,8 @@ Token getNextToken(FILE *source, FILE *transition) {
             // ================================================================
             case STATE_START: {
                 appendTransition(&token, STATE_START);
-                printf("Started scanning...    Current lexeme is \e[0;35m%-40s\e[0m | Current token: \e[0;35mSTATE_START\e[0m\n", "");
-                fprintf(transition, "Started scanning...    Current lexeme is %-40s | Current token: STATE_START\n", "");
+                printf("Started scanning...    Current lexeme is \e[0;35m%-40s\e[0m | Current state: \e[0;35mSTATE_START\e[0m\n", "");
+                fprintf(transition, "Started scanning...    Current lexeme is %-40s | Current state: STATE_START\n", "");
 
                 if (isspace(c)) {
                     continue;
@@ -605,11 +628,13 @@ Token getNextToken(FILE *source, FILE *transition) {
                                 state = STATE_IN_IDENTIFIER;
                                 CONSUME_CHAR(c);
                             } else {
+                                state = STATE_ERR_UNRECOGNIZED;
+                                appendTransition(&token, state);
                                 CONSUME_CHAR(c);
                                 ACCEPT_LEXEME(TOKEN_ERR_UNRECOGNIZED);
-                            }
                         }
                     }
+                }
                 break;
                 }
 
@@ -668,6 +693,8 @@ Token getNextToken(FILE *source, FILE *transition) {
                         CONSUME_CHAR(c);
                         break;
                     case EOF:
+                        state = STATE_ERR_UNTERMINATED_BLOCK_COMMENT;
+                        appendTransition(&token, state);
                         ACCEPT_LEXEME(TOKEN_ERR_UNTERMINATED_BLOCK_COMMENT);
                         break;
                     default:
@@ -686,6 +713,8 @@ Token getNextToken(FILE *source, FILE *transition) {
                         CONSUME_CHAR(c);
                         break;
                     case EOF:
+                        state = STATE_ERR_UNTERMINATED_BLOCK_COMMENT;
+                        appendTransition(&token, state);
                         ACCEPT_LEXEME(TOKEN_ERR_UNTERMINATED_BLOCK_COMMENT);
                         break;
                     default:
@@ -704,14 +733,8 @@ Token getNextToken(FILE *source, FILE *transition) {
                     state = STATE_IN_FLOAT_DOT;
                     CONSUME_CHAR(c);
                 } else if (isalpha(c) || c == '_') {
+                    state = STATE_ERR_INVALID_NUMBER;
                     CONSUME_CHAR(c);
-                    while ((c = fgetc(source)) != EOF && (isalnum(c) || c == '_')) {
-                        if (lexemeIdx < (int)sizeof(token.lexeme) - 1) {
-                            CONSUME_CHAR(c);
-                        }
-                    }
-                    if (c != EOF) ungetc(c, source);
-                    ACCEPT_LEXEME(TOKEN_ERR_INVALID_NUMBER);
                 } else {
                     ungetc(c, source);
                     ACCEPT_LEXEME(TOKEN_INT_LITERAL);
@@ -723,7 +746,8 @@ Token getNextToken(FILE *source, FILE *transition) {
                     state = STATE_IN_FLOAT;
                     CONSUME_CHAR(c);
                 } else {
-                    // Trailing dot without digits (e.g., "42.") is malformed
+                    state = STATE_ERR_MALFORMED_FLOAT;
+                    appendTransition(&token, state);
                     ungetc(c, source);
                     ACCEPT_LEXEME(TOKEN_ERR_MALFORMED_FLOAT);
                 }
@@ -733,15 +757,8 @@ Token getNextToken(FILE *source, FILE *transition) {
                 if (isdigit(c)) {
                     CONSUME_CHAR(c);
                 } else if (isalpha(c) || c == '_' || c == '.') {
-                    // Multiple dots (e.g., "1.2.3") or letters (e.g., "1.2abc")
+                    state = STATE_ERR_INVALID_NUMBER;
                     CONSUME_CHAR(c);
-                    while ((c = fgetc(source)) != EOF && (isalnum(c) || c == '_' || c == '.')) {
-                        if (lexemeIdx < (int)sizeof(token.lexeme) - 1) {
-                            CONSUME_CHAR(c);
-                        }
-                    }
-                    if (c != EOF) ungetc(c, source);
-                    ACCEPT_LEXEME(TOKEN_ERR_INVALID_NUMBER);
                 } else {
                     ungetc(c, source);
                     ACCEPT_LEXEME(TOKEN_FLOAT_LITERAL);
@@ -772,6 +789,8 @@ Token getNextToken(FILE *source, FILE *transition) {
                     case EOF:
                     case '\n':
                     case '\r':
+                        state = STATE_ERR_UNTERMINATED_STRING;
+                        appendTransition(&token, state);
                         ACCEPT_LEXEME(TOKEN_ERR_UNTERMINATED_STRING);
                         break;
                     default:
@@ -783,34 +802,36 @@ Token getNextToken(FILE *source, FILE *transition) {
             // CHARACTER PARSING
             // ================================================================
             case STATE_IN_CHAR:
-                if (lexemeIdx - 1 >= 2) {
-                    while (c != '\'' && c != '\n' && c != '\r' && c != EOF) {
-                        c = fgetc(source);
-                    }
-                    ACCEPT_LEXEME(TOKEN_ERR_CHAR_TOO_LONG);
-                    break;
-                }
-
                 switch (c) {
                     case '\'': {
-                        // Content sits between the opening quote at index 0 and the
-                        // closing quote about to be appended.
                         int contentLen = lexemeIdx - 1;
                         if (contentLen == 1 || (contentLen == 2 && token.lexeme[1] == '\\')) {
                             CONSUME_CHAR(c);
                             ACCEPT_LEXEME(TOKEN_CHAR_LITERAL);
+                        } else if (contentLen == 0) {
+                            state = STATE_ERR_EMPTY_CHAR;
+                            appendTransition(&token, state);
+                            CONSUME_CHAR(c);
+                            ACCEPT_LEXEME(TOKEN_ERR_EMPTY_CHAR);
                         } else {
-                            ACCEPT_LEXEME((contentLen == 0) ? TOKEN_ERR_EMPTY_CHAR : TOKEN_ERR_CHAR_TOO_LONG);
-
+                            state = STATE_ERR_CHAR_TOO_LONG;
+                            appendTransition(&token, state);
+                            CONSUME_CHAR(c);
+                            ACCEPT_LEXEME(TOKEN_ERR_CHAR_TOO_LONG);
                         }
                         break;
                     }
                     case EOF:
                     case '\n':
                     case '\r':
+                        state = STATE_ERR_UNTERMINATED_CHAR;
+                        appendTransition(&token, state);
                         ACCEPT_LEXEME(TOKEN_ERR_UNTERMINATED_CHAR);
                         break;
                     default: 
+                        if (lexemeIdx - 1 >= 2) {
+                            state = STATE_ERR_CHAR_TOO_LONG;
+                        }
                         CONSUME_CHAR(c);
                 }
                 break;
@@ -882,6 +903,8 @@ Token getNextToken(FILE *source, FILE *transition) {
                         ACCEPT_LEXEME(TOKEN_OR);
                         break;
                     default:
+                        state = STATE_ERR_INVALID_OPERATOR;
+                        appendTransition(&token, state);
                         ungetc(c, source);
                         ACCEPT_LEXEME(TOKEN_ERR_INVALID_OPERATOR);
                 }
@@ -894,6 +917,8 @@ Token getNextToken(FILE *source, FILE *transition) {
                         ACCEPT_LEXEME(TOKEN_AND);
                         break;
                     default:
+                        state = STATE_ERR_INVALID_OPERATOR;
+                        appendTransition(&token, state);
                         ungetc(c, source);
                         ACCEPT_LEXEME(TOKEN_ERR_INVALID_OPERATOR);
                         break;
@@ -1158,10 +1183,44 @@ Token getNextToken(FILE *source, FILE *transition) {
             // ================================================================
             case STATE_IN_IDENTIFIER:
                 if (isalnum(c) || c == '_') {
-                    if (lexemeIdx < 255) { CONSUME_CHAR(c); }
+                    if (lexemeIdx >= 32) {
+                        state = STATE_ERR_IDENTIFIER_TOO_LONG;
+                    }
+                    CONSUME_CHAR(c);
                 } else {
                     ungetc(c, source);
-                    ACCEPT_LEXEME((lexemeIdx > 32) ? TOKEN_ERR_IDENTIFIER_TOO_LONG : TOKEN_IDENTIFIER);
+                    ACCEPT_LEXEME(TOKEN_IDENTIFIER);
+                }
+                break;
+            
+            case STATE_ERR_INVALID_NUMBER:
+                if (isalnum(c) || c == '_' || c == '.') {
+                    CONSUME_CHAR(c);
+                } else {
+                    ungetc(c, source);
+                    ACCEPT_LEXEME(TOKEN_ERR_INVALID_NUMBER);
+                }
+                break;
+
+            case STATE_ERR_CHAR_TOO_LONG:
+                if (c != '\'' && c != '\n' && c != '\r' && c != EOF) {
+                    CONSUME_CHAR(c);
+                } else {
+                    if (c == '\'') {
+                        CONSUME_CHAR(c);
+                    } else {
+                        ungetc(c, source);
+                    }
+                    ACCEPT_LEXEME(TOKEN_ERR_CHAR_TOO_LONG);
+                }
+                break;
+
+            case STATE_ERR_IDENTIFIER_TOO_LONG:
+                if (isalnum(c) || c == '_') {
+                    CONSUME_CHAR(c);
+                } else {
+                    ungetc(c, source);
+                    ACCEPT_LEXEME(TOKEN_ERR_IDENTIFIER_TOO_LONG);
                 }
                 break;
 
@@ -1169,8 +1228,8 @@ Token getNextToken(FILE *source, FILE *transition) {
                 break;
         }
 
-        // If the DFA transitioned to a new state in this step, record it in the trace
-        if (state != prevState) {
+        // If the DFA transitioned to a new state (and it isn't DONE), record it in the trace
+        if (state != prevState && state != STATE_DONE) {
             appendTransition(&token, state);
         }
 
