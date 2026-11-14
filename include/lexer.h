@@ -57,11 +57,11 @@ typedef enum {
     // ---- Operators: Arithmetic ----
     TOKEN_PLUS,
     TOKEN_MINUS,
-    TOKEN_STAR,
-    TOKEN_SLASH,
-    TOKEN_PERCENT,
-    TOKEN_BACKSLASH,
-    TOKEN_CARET,
+    TOKEN_MULTIPLY,
+    TOKEN_DIVIDE,
+    TOKEN_MODULO,
+    TOKEN_INT_DIV,
+    TOKEN_EXPONENT,
 
     // ---- Operators: Relational ----
     TOKEN_EQ,        // ==
@@ -80,9 +80,9 @@ typedef enum {
     TOKEN_ASSIGN,         // =
     TOKEN_PLUS_ASSIGN,    // +=
     TOKEN_MINUS_ASSIGN,   // -=
-    TOKEN_STAR_ASSIGN,    // *=
-    TOKEN_SLASH_ASSIGN,   // /=
-    TOKEN_PERCENT_ASSIGN, // %=
+    TOKEN_MULTIPLY_ASSIGN,// *=
+    TOKEN_DIVIDE_ASSIGN,  // /=
+    TOKEN_MODULO_ASSIGN,  // %=
 
     // ---- Operators: Special ----
     TOKEN_PIPELINE,  // |>

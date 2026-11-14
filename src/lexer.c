@@ -29,8 +29,8 @@ typedef enum {
     // ---- Operator Branching (Multi-char operators) ----
     STATE_IN_MINUS,
     STATE_IN_PLUS,
-    STATE_IN_STAR,
-    STATE_IN_PERCENT,
+    STATE_IN_MULTIPLY,
+    STATE_IN_MODULO,
     STATE_IN_PIPE,
     STATE_IN_AMPERSAND,
     STATE_IN_EQUALS,
@@ -223,8 +223,8 @@ static const char* getStateName(LexerState state) {
 
         case STATE_IN_MINUS:                return "STATE_IN_MINUS";
         case STATE_IN_PLUS:                 return "STATE_IN_PLUS";
-        case STATE_IN_STAR:                 return "STATE_IN_STAR";
-        case STATE_IN_PERCENT:              return "STATE_IN_PERCENT";
+        case STATE_IN_MULTIPLY:             return "STATE_IN_MULTIPLY";
+        case STATE_IN_MODULO:               return "STATE_IN_MODULO";
         case STATE_IN_PIPE:                 return "STATE_IN_PIPE";
         case STATE_IN_AMPERSAND:            return "STATE_IN_AMPERSAND";
         case STATE_IN_EQUALS:               return "STATE_IN_EQUALS";
@@ -457,11 +457,11 @@ Token getNextToken(FILE *source, FILE *transition) {
                             CONSUME_CHAR(c);
                             break;
                         case '*':
-                            state = STATE_IN_STAR;
+                            state = STATE_IN_MULTIPLY;
                             CONSUME_CHAR(c);
                             break;
                         case '%':
-                            state = STATE_IN_PERCENT;
+                            state = STATE_IN_MODULO;
                             CONSUME_CHAR(c);
                             break;
                         case '|':
@@ -494,11 +494,11 @@ Token getNextToken(FILE *source, FILE *transition) {
                             break;
                         case '^':
                             CONSUME_CHAR(c);
-                            ACCEPT_LEXEME(TOKEN_CARET);
+                            ACCEPT_LEXEME(TOKEN_EXPONENT);
                             break;
                         case '\\':
                             CONSUME_CHAR(c);
-                            ACCEPT_LEXEME(TOKEN_BACKSLASH);
+                            ACCEPT_LEXEME(TOKEN_INT_DIV);
                             break;
                         case '.':
                             CONSUME_CHAR(c);
@@ -637,14 +637,14 @@ Token getNextToken(FILE *source, FILE *transition) {
                         token.lexeme[0] = '/';
                         lexemeIdx = 1;
                         CONSUME_CHAR(c);
-                        ACCEPT_LEXEME(TOKEN_SLASH_ASSIGN);
+                        ACCEPT_LEXEME(TOKEN_DIVIDE_ASSIGN);
                         break;
                     default:
                         ungetc(c, source);
                         // Restore the initial '/' that was cleared, then accept
                         token.lexeme[0] = '/';
                         lexemeIdx = 1;
-                        ACCEPT_LEXEME(TOKEN_SLASH);
+                        ACCEPT_LEXEME(TOKEN_DIVIDE);
                         break;
                 }
                 break;
@@ -847,27 +847,27 @@ Token getNextToken(FILE *source, FILE *transition) {
                 }
                 break;
 
-            case STATE_IN_STAR:
+            case STATE_IN_MULTIPLY:
                 switch (c) {
                     case '=':
                         CONSUME_CHAR(c);
-                        ACCEPT_LEXEME(TOKEN_STAR_ASSIGN);
+                        ACCEPT_LEXEME(TOKEN_MULTIPLY_ASSIGN);
                         break;
                     default:
                         ungetc(c, source);
-                        ACCEPT_LEXEME(TOKEN_STAR);
+                        ACCEPT_LEXEME(TOKEN_MULTIPLY);
                 }
                 break;
 
-            case STATE_IN_PERCENT:
+            case STATE_IN_MODULO:
                 switch (c) {
                     case '=':
                         CONSUME_CHAR(c);
-                        ACCEPT_LEXEME(TOKEN_PERCENT_ASSIGN);
+                        ACCEPT_LEXEME(TOKEN_MODULO_ASSIGN);
                         break;
                     default:
                         ungetc(c, source);
-                        ACCEPT_LEXEME(TOKEN_PERCENT);
+                        ACCEPT_LEXEME(TOKEN_MODULO);
                 }
                 break;
 
@@ -1230,12 +1230,12 @@ const char* getTokenTypeName(TokenType type) {
 
         case TOKEN_PLUS:            return "PLUS";
         case TOKEN_MINUS:           return "MINUS";
-        case TOKEN_STAR:            return "STAR";
-        case TOKEN_SLASH:           return "SLASH";
-        case TOKEN_PERCENT:         return "PERCENT";
-        case TOKEN_BACKSLASH:       return "BACKSLASH";
+        case TOKEN_MULTIPLY:        return "MULTIPLY";
+        case TOKEN_DIVIDE:          return "DIVIDE";
+        case TOKEN_MODULO:          return "MODULO";
+        case TOKEN_INT_DIV:         return "INT_DIV";
         case TOKEN_DOT:             return "DOT";
-        case TOKEN_CARET:           return "CARET";
+        case TOKEN_EXPONENT:        return "EXPONENT";
 
         case TOKEN_EQ:              return "EQ";
         case TOKEN_NE:              return "NE";
@@ -1251,9 +1251,9 @@ const char* getTokenTypeName(TokenType type) {
         case TOKEN_ASSIGN:          return "ASSIGN";
         case TOKEN_PLUS_ASSIGN:     return "PLUS_ASSIGN";
         case TOKEN_MINUS_ASSIGN:    return "MINUS_ASSIGN";
-        case TOKEN_STAR_ASSIGN:     return "STAR_ASSIGN";
-        case TOKEN_SLASH_ASSIGN:    return "SLASH_ASSIGN";
-        case TOKEN_PERCENT_ASSIGN:  return "PERCENT_ASSIGN";
+        case TOKEN_MULTIPLY_ASSIGN: return "MULTIPLY_ASSIGN";
+        case TOKEN_DIVIDE_ASSIGN:   return "DIVIDE_ASSIGN";
+        case TOKEN_MODULO_ASSIGN:   return "MODULO_ASSIGN";
 
         case TOKEN_PIPELINE:        return "PIPELINE";
         case TOKEN_ARROW:           return "ARROW";
