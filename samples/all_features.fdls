@@ -6,6 +6,7 @@
 bool lightsOn = false;
 int roomTemp = 22;
 int masterPin = 1234;
+int multExample = 3 * 3;
 [string] accessLogs = ["System Booted", "Thermostat Initialized"];
 
 // 2. DATA-DRIVEN WATCHERS (react)
