@@ -517,11 +517,11 @@ Token getNextToken(FILE *source, FILE *transition) {
                             break;
                         case '^':
                             CONSUME_CHAR(c);
-                            ACCEPT_LEXEME(TOKEN_CARET);
+                            ACCEPT_LEXEME(TOKEN_EXPONENT);
                             break;
                         case '\\':
                             CONSUME_CHAR(c);
-                            ACCEPT_LEXEME(TOKEN_BACKSLASH);
+                            ACCEPT_LEXEME(TOKEN_INTEGER_DIVISION);
                             break;
                         case '.':
                             CONSUME_CHAR(c);
@@ -662,14 +662,14 @@ Token getNextToken(FILE *source, FILE *transition) {
                         token.lexeme[0] = '/';
                         lexemeIdx = 1;
                         CONSUME_CHAR(c);
-                        ACCEPT_LEXEME(TOKEN_SLASH_ASSIGN);
+                        ACCEPT_LEXEME(TOKEN_DIVIDE_ASSIGN);
                         break;
                     default:
                         ungetc(c, source);
                         // Restore the initial '/' that was cleared, then accept
                         token.lexeme[0] = '/';
                         lexemeIdx = 1;
-                        ACCEPT_LEXEME(TOKEN_SLASH);
+                        ACCEPT_LEXEME(TOKEN_DIVISION);
                         break;
                 }
                 break;
@@ -843,11 +843,11 @@ Token getNextToken(FILE *source, FILE *transition) {
                 switch (c) {
                     case '=':
                         CONSUME_CHAR(c);
-                        ACCEPT_LEXEME(TOKEN_PLUS_ASSIGN);
+                        ACCEPT_LEXEME(TOKEN_ADD_ASSIGN);
                         break;
                     default:
                         ungetc(c, source);
-                        ACCEPT_LEXEME(TOKEN_PLUS);
+                        ACCEPT_LEXEME(TOKEN_ADDITION);
                         break;
                 }
                 break;
@@ -860,11 +860,11 @@ Token getNextToken(FILE *source, FILE *transition) {
                         break;
                     case '=':
                         CONSUME_CHAR(c);
-                        ACCEPT_LEXEME(TOKEN_MINUS_ASSIGN);
+                        ACCEPT_LEXEME(TOKEN_SUBTRACT_ASSIGN);
                         break;
                     default:
                         ungetc(c, source);
-                        ACCEPT_LEXEME(TOKEN_MINUS);
+                        ACCEPT_LEXEME(TOKEN_SUBTRACTION);
                 }
                 break;
 
@@ -872,11 +872,11 @@ Token getNextToken(FILE *source, FILE *transition) {
                 switch (c) {
                     case '=':
                         CONSUME_CHAR(c);
-                        ACCEPT_LEXEME(TOKEN_STAR_ASSIGN);
+                        ACCEPT_LEXEME(TOKEN_MULTIPLY_ASSIGN);
                         break;
                     default:
                         ungetc(c, source);
-                        ACCEPT_LEXEME(TOKEN_STAR);
+                        ACCEPT_LEXEME(TOKEN_MULTIPLICATION);
                 }
                 break;
 
@@ -884,11 +884,11 @@ Token getNextToken(FILE *source, FILE *transition) {
                 switch (c) {
                     case '=':
                         CONSUME_CHAR(c);
-                        ACCEPT_LEXEME(TOKEN_PERCENT_ASSIGN);
+                        ACCEPT_LEXEME(TOKEN_MODULO_ASSIGN);
                         break;
                     default:
                         ungetc(c, source);
-                        ACCEPT_LEXEME(TOKEN_PERCENT);
+                        ACCEPT_LEXEME(TOKEN_MODULO);
                 }
                 break;
 
@@ -900,7 +900,7 @@ Token getNextToken(FILE *source, FILE *transition) {
                         break;
                     case '|':
                         CONSUME_CHAR(c);
-                        ACCEPT_LEXEME(TOKEN_OR);
+                        ACCEPT_LEXEME(TOKEN_LOGICAL_OR);
                         break;
                     default:
                         state = STATE_ERR_INVALID_OPERATOR;
@@ -914,7 +914,7 @@ Token getNextToken(FILE *source, FILE *transition) {
                 switch (c) {
                     case '&':
                         CONSUME_CHAR(c);
-                        ACCEPT_LEXEME(TOKEN_AND);
+                        ACCEPT_LEXEME(TOKEN_LOGICAL_AND);
                         break;
                     default:
                         state = STATE_ERR_INVALID_OPERATOR;
@@ -929,11 +929,11 @@ Token getNextToken(FILE *source, FILE *transition) {
                 switch (c) {
                     case '=':
                         CONSUME_CHAR(c);
-                        ACCEPT_LEXEME(TOKEN_EQ);
+                        ACCEPT_LEXEME(TOKEN_EQUALITY);
                         break;
                     default:
                         ungetc(c, source);
-                        ACCEPT_LEXEME(TOKEN_ASSIGN);
+                        ACCEPT_LEXEME(TOKEN_ASSIGNMENT);
                         break;
                 }
                 break;
@@ -942,11 +942,11 @@ Token getNextToken(FILE *source, FILE *transition) {
                 switch (c) {
                     case '=':
                         CONSUME_CHAR(c);
-                        ACCEPT_LEXEME(TOKEN_NE);
+                        ACCEPT_LEXEME(TOKEN_INEQUALITY);
                         break;
                     default:
                         ungetc(c, source);
-                        ACCEPT_LEXEME(TOKEN_NOT);
+                        ACCEPT_LEXEME(TOKEN_LOGICAL_NOT);
                         break;
                 }
                 break;
@@ -955,11 +955,11 @@ Token getNextToken(FILE *source, FILE *transition) {
                 switch (c) {
                     case '=':
                         CONSUME_CHAR(c);
-                        ACCEPT_LEXEME(TOKEN_LE);
+                        ACCEPT_LEXEME(TOKEN_LESS_EQUAL);
                         break;
                     default:
                         ungetc(c, source);
-                        ACCEPT_LEXEME(TOKEN_LT);
+                        ACCEPT_LEXEME(TOKEN_LESS_THAN);
                         break;
                 }
                 break;
@@ -968,11 +968,11 @@ Token getNextToken(FILE *source, FILE *transition) {
                 switch (c) {
                     case '=':
                         CONSUME_CHAR(c);
-                        ACCEPT_LEXEME(TOKEN_GE);
+                        ACCEPT_LEXEME(TOKEN_GREATER_EQUAL);
                         break;
                     default:
                         ungetc(c, source);
-                        ACCEPT_LEXEME(TOKEN_GT);
+                        ACCEPT_LEXEME(TOKEN_GREATER_THAN);
                         break;
                 }
                 break;
@@ -1287,32 +1287,32 @@ const char* getTokenTypeName(TokenType type) {
         case TOKEN_QUIT:            return "QUIT";
         case TOKEN_SLEEP:           return "SLEEP";
 
-        case TOKEN_PLUS:            return "PLUS";
-        case TOKEN_MINUS:           return "MINUS";
-        case TOKEN_STAR:            return "STAR";
-        case TOKEN_SLASH:           return "SLASH";
-        case TOKEN_PERCENT:         return "PERCENT";
-        case TOKEN_BACKSLASH:       return "BACKSLASH";
+        case TOKEN_ADDITION:        return "ADDITION";
+        case TOKEN_SUBTRACTION:     return "SUBTRACTION";
+        case TOKEN_MULTIPLICATION:  return "MULTIPLICATION";
+        case TOKEN_DIVISION:        return "DIVISION";
+        case TOKEN_MODULO:          return "MODULO";
+        case TOKEN_INTEGER_DIVISION: return "INTEGER_DIVISION";
         case TOKEN_DOT:             return "DOT";
-        case TOKEN_CARET:           return "CARET";
+        case TOKEN_EXPONENT:        return "EXPONENT";
 
-        case TOKEN_EQ:              return "EQ";
-        case TOKEN_NE:              return "NE";
-        case TOKEN_LT:              return "LT";
-        case TOKEN_GT:              return "GT";
-        case TOKEN_LE:              return "LE";
-        case TOKEN_GE:              return "GE";
+        case TOKEN_EQUALITY:        return "EQUALITY";
+        case TOKEN_INEQUALITY:      return "INEQUALITY";
+        case TOKEN_LESS_THAN:       return "LESS_THAN";
+        case TOKEN_GREATER_THAN:    return "GREATER_THAN";
+        case TOKEN_LESS_EQUAL:      return "LESS_EQUAL";
+        case TOKEN_GREATER_EQUAL:   return "GREATER_EQUAL";
 
-        case TOKEN_NOT:             return "NOT";
-        case TOKEN_AND:             return "AND";
-        case TOKEN_OR:              return "OR";
+        case TOKEN_LOGICAL_NOT:     return "LOGICAL_NOT";
+        case TOKEN_LOGICAL_AND:     return "LOGICAL_AND";
+        case TOKEN_LOGICAL_OR:      return "LOGICAL_OR";
 
-        case TOKEN_ASSIGN:          return "ASSIGN";
-        case TOKEN_PLUS_ASSIGN:     return "PLUS_ASSIGN";
-        case TOKEN_MINUS_ASSIGN:    return "MINUS_ASSIGN";
-        case TOKEN_STAR_ASSIGN:     return "STAR_ASSIGN";
-        case TOKEN_SLASH_ASSIGN:    return "SLASH_ASSIGN";
-        case TOKEN_PERCENT_ASSIGN:  return "PERCENT_ASSIGN";
+        case TOKEN_ASSIGNMENT:      return "ASSIGNMENT";
+        case TOKEN_ADD_ASSIGN:      return "ADD_ASSIGN";
+        case TOKEN_SUBTRACT_ASSIGN: return "SUBTRACT_ASSIGN";
+        case TOKEN_MULTIPLY_ASSIGN: return "MULTIPLY_ASSIGN";
+        case TOKEN_DIVIDE_ASSIGN:   return "DIVIDE_ASSIGN";
+        case TOKEN_MODULO_ASSIGN:   return "MODULO_ASSIGN";
 
         case TOKEN_PIPELINE:        return "PIPELINE";
         case TOKEN_ARROW:           return "ARROW";

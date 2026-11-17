@@ -172,22 +172,22 @@ Examples include:
 
 | Input | Token |
 | --- | --- |
-| `+`, `+=` | `TOKEN_PLUS`, `TOKEN_PLUS_ASSIGN` |
-| `-`, `-=`, `->` | `TOKEN_MINUS`, `TOKEN_MINUS_ASSIGN`, `TOKEN_ARROW` |
-| `*`, `*=` | `TOKEN_STAR`, `TOKEN_STAR_ASSIGN` |
-| `%`, `%=` | `TOKEN_PERCENT`, `TOKEN_PERCENT_ASSIGN` |
-| `=`, `==` | `TOKEN_ASSIGN`, `TOKEN_EQ` |
-| `!`, `!=` | `TOKEN_NOT`, `TOKEN_NE` |
-| `<`, `<=`; `>`, `>=` | Relational token pairs |
-| `&&`; `||`; `|>` | `TOKEN_AND`; `TOKEN_OR`; `TOKEN_PIPELINE` |
-| `^` | `TOKEN_CARET` |
-| `\` | `TOKEN_BACKSLASH` |
+| `+`, `+=` | `TOKEN_ADDITION`, `TOKEN_ADD_ASSIGN` |
+| `-`, `-=`, `->` | `TOKEN_SUBTRACTION`, `TOKEN_SUBTRACT_ASSIGN`, `TOKEN_ARROW` |
+| `*`, `*=` | `TOKEN_MULTIPLICATION`, `TOKEN_MULTIPLY_ASSIGN` |
+| `%`, `%=` | `TOKEN_MODULO`, `TOKEN_MODULO_ASSIGN` |
+| `=`, `==` | `TOKEN_ASSIGNMENT`, `TOKEN_EQUALITY` |
+| `!`, `!=` | `TOKEN_LOGICAL_NOT`, `TOKEN_INEQUALITY` |
+| `<`, `<=`; `>`, `>=` | `TOKEN_LESS_THAN`, `TOKEN_LESS_EQUAL`, `TOKEN_GREATER_THAN`, `TOKEN_GREATER_EQUAL` |
+| `&&`; `||`; `|>` | `TOKEN_LOGICAL_AND`; `TOKEN_LOGICAL_OR`; `TOKEN_PIPELINE` |
+| `^` | `TOKEN_EXPONENT` |
+| `\` | `TOKEN_INTEGER_DIVISION` |
 | `?` | `TOKEN_QUESTION` (optional-type suffix) |
 | `.` | `TOKEN_DOT` (intrinsic property operator) |
 | `;`, `,`, `:` | `TOKEN_SEMICOLON`, `TOKEN_COMMA`, `TOKEN_COLON` |
 | `(`, `)`, `{`, `}`, `[`, `]` | Corresponding left/right parenthesis, brace, and bracket tokens |
 
-The lexer also recognizes `/=` as `TOKEN_SLASH_ASSIGN` and accepts `\` and `^`
+The lexer also recognizes `/=` as `TOKEN_DIVIDE_ASSIGN` and accepts `\` and `^`
 as standalone operators. A single `&` or a `|` not followed by `|` or `>`
 produces `TOKEN_ERR_INVALID_OPERATOR`. Characters that are not part of a
 recognized token, such as `@`, produce `TOKEN_ERR_UNRECOGNIZED`.

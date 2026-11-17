@@ -55,40 +55,64 @@ typedef enum {
     TOKEN_SLEEP,
 
     // ---- Operators: Arithmetic ----
-    TOKEN_PLUS,
-    TOKEN_MINUS,
-    TOKEN_STAR,
-    TOKEN_SLASH,
-    TOKEN_PERCENT,
-    TOKEN_BACKSLASH,
-    TOKEN_CARET,
+    TOKEN_ADDITION,
+    TOKEN_SUBTRACTION,
+    TOKEN_MULTIPLICATION,
+    TOKEN_DIVISION,
+    TOKEN_MODULO,
+    TOKEN_INTEGER_DIVISION,
+    TOKEN_EXPONENT,
 
     // ---- Operators: Relational ----
-    TOKEN_EQ,        // ==
-    TOKEN_NE,        // !=
-    TOKEN_LT,        // <
-    TOKEN_GT,        // >
-    TOKEN_LE,        // <=
-    TOKEN_GE,        // >=
+    TOKEN_EQUALITY,       // ==
+    TOKEN_INEQUALITY,     // !=
+    TOKEN_LESS_THAN,      // <
+    TOKEN_GREATER_THAN,   // >
+    TOKEN_LESS_EQUAL,     // <=
+    TOKEN_GREATER_EQUAL,  // >=
 
     // ---- Operators: Logical ----
-    TOKEN_NOT,       // !
-    TOKEN_AND,       // &&
-    TOKEN_OR,        // ||
+    TOKEN_LOGICAL_NOT,    // !
+    TOKEN_LOGICAL_AND,    // &&
+    TOKEN_LOGICAL_OR,     // ||
 
     // ---- Operators: Assignment ----
-    TOKEN_ASSIGN,         // =
-    TOKEN_PLUS_ASSIGN,    // +=
-    TOKEN_MINUS_ASSIGN,   // -=
-    TOKEN_STAR_ASSIGN,    // *=
-    TOKEN_SLASH_ASSIGN,   // /=
-    TOKEN_PERCENT_ASSIGN, // %=
+    TOKEN_ASSIGNMENT,         // =
+    TOKEN_ADD_ASSIGN,         // +=
+    TOKEN_SUBTRACT_ASSIGN,    // -=
+    TOKEN_MULTIPLY_ASSIGN,    // *=
+    TOKEN_DIVIDE_ASSIGN,      // /=
+    TOKEN_MODULO_ASSIGN,      // %=
 
     // ---- Operators: Special ----
     TOKEN_PIPELINE,  // |>
     TOKEN_ARROW,     // ->
     TOKEN_QUESTION,  // ?  (optional-type suffix)
     TOKEN_DOT,       // . (intrinsic property operator)
+
+    // ---- Backward-compatible aliases ----
+    TOKEN_PLUS = TOKEN_ADDITION,
+    TOKEN_MINUS = TOKEN_SUBTRACTION,
+    TOKEN_STAR = TOKEN_MULTIPLICATION,
+    TOKEN_SLASH = TOKEN_DIVISION,
+    TOKEN_PERCENT = TOKEN_MODULO,
+    TOKEN_BACKSLASH = TOKEN_INTEGER_DIVISION,
+    TOKEN_CARET = TOKEN_EXPONENT,
+    TOKEN_EQ = TOKEN_EQUALITY,
+    TOKEN_NE = TOKEN_INEQUALITY,
+    TOKEN_LT = TOKEN_LESS_THAN,
+    TOKEN_GT = TOKEN_GREATER_THAN,
+    TOKEN_LE = TOKEN_LESS_EQUAL,
+    TOKEN_GE = TOKEN_GREATER_EQUAL,
+    TOKEN_NOT = TOKEN_LOGICAL_NOT,
+    TOKEN_AND = TOKEN_LOGICAL_AND,
+    TOKEN_OR = TOKEN_LOGICAL_OR,
+    TOKEN_ASSIGN = TOKEN_ASSIGNMENT,
+    TOKEN_PLUS_ASSIGN = TOKEN_ADD_ASSIGN,
+    TOKEN_MINUS_ASSIGN = TOKEN_SUBTRACT_ASSIGN,
+    TOKEN_STAR_ASSIGN = TOKEN_MULTIPLY_ASSIGN,
+    TOKEN_SLASH_ASSIGN = TOKEN_DIVIDE_ASSIGN,
+    TOKEN_PERCENT_ASSIGN = TOKEN_MODULO_ASSIGN,
 
     // ---- Delimiters ----
     TOKEN_SEMICOLON,
