@@ -1,5 +1,5 @@
 // Linear search checks each item from left to right.
-fn linearSearch([int] values, int target) -> int {
+fn linearSearch([int] values, int target) : int {
     for (int index = 0; index < values.length; index += 1) {
         if (values[index] == target) {
             return index;
@@ -10,7 +10,7 @@ fn linearSearch([int] values, int target) -> int {
 }
 
 // Binary search requires the input array to be sorted.
-fn binarySearch([int] values, int target) -> int {
+fn binarySearch([int] values, int target) : int {
     int low = 0;
     int high = values.length - 1;
 

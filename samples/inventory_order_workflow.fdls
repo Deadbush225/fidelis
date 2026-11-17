@@ -28,14 +28,14 @@ react (cocoaStock) {
     print("[STOCK] Cocoa inventory changed.");
 }
 
-fn calculateTotal(float unitPrice, int quantity) -> float {
+fn calculateTotal(float unitPrice, int quantity) : float {
     float subtotal = unitPrice * quantity;
     float discount = subtotal * discountRate;
     float taxedTotal = (subtotal - discount) * (1.0 + taxRate);
     return taxedTotal;
 }
 
-fn stockLabel(int quantity) -> string {
+fn stockLabel(int quantity) : string {
     if (quantity == 0) {
         return "OUT OF STOCK";
     } else if (quantity <= 3) {
@@ -45,7 +45,7 @@ fn stockLabel(int quantity) -> string {
     }
 }
 
-fn clampStock(int quantity) -> int {
+fn clampStock(int quantity) : int {
     if (quantity < 0) {
         return 0;
     } else if (quantity > 999) {

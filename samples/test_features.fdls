@@ -13,7 +13,7 @@ if (x > 10 && temp <= 100.0) {
     print("Values are in range!");
 }
 
-fn calculate(int a, int b) -> float {
+fn calculate(int a, int b) : float {
     return (a + b) / 2.0;
 }
 

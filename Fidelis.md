@@ -779,7 +779,7 @@ their names are not keywords or reserved words.
 #### `length`
 
 ```text
-length(string value) -> int
+length(string value) : int
 ```
 
 `length` also accepts a non-null array whose elements have any supported
@@ -797,7 +797,7 @@ int labelLength = length("ACTIVE"); // 6
 #### `replace`
 
 ```text
-replace(string source, string search, string replacement) -> string
+replace(string source, string search, string replacement) : string
 ```
 
 Returns a new string made by replacing every non-overlapping occurrence of
@@ -824,7 +824,7 @@ int? input = null;
 [string] accessLogs = ["System Booted", "Thermostat Initialized"];
 
 // Function Declaration
-fn formatStatus(bool status) -> string {
+fn formatStatus(bool status) : string {
     return (status == true) ? "ACTIVE" : "INACTIVE";
 }
 ```
