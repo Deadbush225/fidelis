@@ -239,76 +239,99 @@ static bool readNextEntry(Parser *parser, SymbolEntry *entry) {
     char line[1024];
 
     while (fgets(line, sizeof(line), parser->symbolTable) != NULL) {
-        entry->lineNumber++;
+        parser->symbolTableLine++;
 
         // Skip empty lines
         if (line[0] == '\n' || line[0] == '\r' || line[0] == '\0') {
             continue;
         }
 
-        // Skip header lines (line 1 contains "TOKEN TYPE", line 2 contains "====")
+        // Skip header and divider lines
         if (strstr(line, "TOKEN TYPE") != NULL || strstr(line, "===") != NULL) {
             continue;
         }
 
-        // Parse the fixed-width columns: "%-32s | %-50s | %s"
-        // Extract token type (first 32 characters)
+        // Format: LINE | COL | TOKEN TYPE | LEXEME | STATE TRANSITIONS
+        char *p1 = strchr(line, '|');
+        if (p1 == NULL) continue;
+        char *p2 = strchr(p1 + 1, '|');
+        if (p2 == NULL) continue;
+        char *p3 = strchr(p2 + 1, '|');
+        if (p3 == NULL) continue;
+
+        // Extract LINE, COL, and TOKEN TYPE
+        char lineField[32] = {0};
+        char colField[32] = {0};
         char typeField[64] = {0};
-        strncpy(typeField, line, 32);
-        typeField[32] = '\0';
+
+        size_t lineLen = (size_t)(p1 - line);
+        if (lineLen >= sizeof(lineField)) lineLen = sizeof(lineField) - 1;
+        strncpy(lineField, line, lineLen);
+        trimWhitespace(lineField);
+
+        size_t colLen = (size_t)(p2 - (p1 + 1));
+        if (colLen >= sizeof(colField)) colLen = sizeof(colField) - 1;
+        strncpy(colField, p1 + 1, colLen);
+        trimWhitespace(colField);
+
+        size_t typeLen = (size_t)(p3 - (p2 + 1));
+        if (typeLen >= sizeof(typeField)) typeLen = sizeof(typeField) - 1;
+        strncpy(typeField, p2 + 1, typeLen);
         trimWhitespace(typeField);
 
-        // Check if we have enough content after the type field
-        if (strlen(line) < 35) {
+        // Wrapped continuation rows have an empty TOKEN TYPE column
+        if (typeField[0] == '\0') {
             continue;
         }
 
-        // Extract lexeme (characters 35 to 85, since " | " is at positions 32-34)
-        char lexemeField[256] = {0};
-        int lexemeStart = 35; // 32 (type) + 3 (" | ")
-        int lexemeWidth = 50;
-        if ((size_t)lexemeStart + lexemeWidth <= strlen(line)) {
-            strncpy(lexemeField, line + lexemeStart, lexemeWidth);
-        } else if ((size_t)lexemeStart < strlen(line)) {
-            strncpy(lexemeField, line + lexemeStart, strlen(line) - lexemeStart);
+        // Start of LEXEME column (skip the single space after '|')
+        char *lexemeStart = p3 + 1;
+        if (*lexemeStart == ' ') lexemeStart++;
+
+        // Find the separator before STATE TRANSITIONS safely (even if lexeme has '|')
+        char *transSep = strstr(lexemeStart, " | STATE_");
+        char *p4 = NULL;
+        if (transSep != NULL) {
+            p4 = transSep + 1; // points to '|'
+        } else {
+            p4 = strrchr(lexemeStart, '|');
         }
-        lexemeField[lexemeWidth] = '\0';
+
+        char lexemeField[256] = {0};
+        if (p4 != NULL && p4 > lexemeStart) {
+            size_t lexLen = (size_t)(p4 - lexemeStart);
+            if (lexLen >= sizeof(lexemeField)) lexLen = sizeof(lexemeField) - 1;
+            strncpy(lexemeField, lexemeStart, lexLen);
+        } else {
+            strncpy(lexemeField, lexemeStart, sizeof(lexemeField) - 1);
+        }
         trimWhitespace(lexemeField);
 
-        // Extract transitions (the rest after the second " | ")
-        char *transStart = NULL;
-        int separatorCount = 0;
-        for (int i = 0; line[i] != '\0'; i++) {
-            if (line[i] == '|' && (i == 0 || line[i-1] == ' ')) {
-                separatorCount++;
-                if (separatorCount == 2) {
-                    transStart = line + i + 1; // Skip past "|"
-                    while (*transStart == ' ') transStart++;
-                    break;
-                }
-            }
-        }
+        // Fill entry fields
+        entry->sourceLine = atoi(lineField);
+        entry->sourceColumn = atoi(colField);
+        entry->symbolTableLine = parser->symbolTableLine;
 
-        // Fill the entry
         strncpy(entry->type, typeField, sizeof(entry->type) - 1);
         entry->type[sizeof(entry->type) - 1] = '\0';
 
         strncpy(entry->lexeme, lexemeField, sizeof(entry->lexeme) - 1);
         entry->lexeme[sizeof(entry->lexeme) - 1] = '\0';
 
-        if (transStart != NULL) {
+        if (p4 != NULL) {
+            char *transStart = p4 + 1;
+            while (*transStart == ' ') transStart++;
             strncpy(entry->transitions, transStart, sizeof(entry->transitions) - 1);
             entry->transitions[sizeof(entry->transitions) - 1] = '\0';
-            // Remove trailing newline
             size_t tlen = strlen(entry->transitions);
-            while (tlen > 0 && (entry->transitions[tlen-1] == '\n' || entry->transitions[tlen-1] == '\r')) {
+            while (tlen > 0 && (entry->transitions[tlen - 1] == '\n' || entry->transitions[tlen - 1] == '\r')) {
                 entry->transitions[--tlen] = '\0';
             }
         } else {
             entry->transitions[0] = '\0';
         }
 
-        // Comments are lexer output, but not parser statements.
+        // Comments are lexer output, not parser statements
         if (strcmp(entry->type, "LINE_COMMENT") == 0 ||
             strcmp(entry->type, "BLOCK_COMMENT") == 0) {
             continue;
@@ -338,22 +361,24 @@ Parameters:
 Returns:
     bool - true if initialization succeeded.
 */
-bool initParser(Parser *parser, const char *symTablePath, const char *outputPath) {
+bool initParser(Parser *parser, const char *sourceFilePath, const char *symTablePath, const char *outputPath) {
     if (parser == NULL || symTablePath == NULL || outputPath == NULL) {
         return false;
     }
 
-    // Zero out the parser state
     memset(parser, 0, sizeof(Parser));
 
-    // Open the symbol table file (output of the lexer)
+    if (sourceFilePath != NULL) {
+        strncpy(parser->sourceFilePath, sourceFilePath, sizeof(parser->sourceFilePath) - 1);
+        parser->sourceFilePath[sizeof(parser->sourceFilePath) - 1] = '\0';
+    }
+
     parser->symbolTable = fopen(symTablePath, "r");
     if (parser->symbolTable == NULL) {
         fprintf(stderr, "Error: Could not open symbol table file: %s\n", symTablePath);
         return false;
     }
 
-    // Open the output file for parse results
     parser->output = fopen(outputPath, "w");
     if (parser->output == NULL) {
         fprintf(stderr, "Error: Could not create output file: %s\n", outputPath);
@@ -367,15 +392,14 @@ bool initParser(Parser *parser, const char *symTablePath, const char *outputPath
     parser->errorCount = 0;
     parser->recoveryAttempts = 0;
 
-    // Read the first token
     if (!readNextEntry(parser, &parser->currentToken)) {
         parser->hasMoreTokens = false;
     }
 
-    // Write the parse header
     fprintf(parser->output, "================================================================================\n");
     fprintf(parser->output, "  FIDELIS RECURSIVE DESCENT PARSER — PARSE TRACE\n");
-    fprintf(parser->output, "  Input: %s\n", symTablePath);
+    fprintf(parser->output, "  Source: %s\n", parser->sourceFilePath[0] ? parser->sourceFilePath : "(unknown)");
+    fprintf(parser->output, "  Input:  %s\n", symTablePath);
     fprintf(parser->output, "================================================================================\n\n");
 
     return true;
@@ -391,13 +415,12 @@ Parameters:
 void advanceToken(Parser *parser) {
     if (parser == NULL || !parser->hasMoreTokens) return;
 
-    // Print the consumed token to the parse trace
-    fprintf(parser->output, "  [Line %3d] Consumed: %-20s | Lexeme: %s\n",
-            parser->currentToken.lineNumber,
+    fprintf(parser->output, "  [Line %3d, Col %3d] Consumed: %-20s | Lexeme: %s\n",
+            parser->currentToken.sourceLine,
+            parser->currentToken.sourceColumn,
             parser->currentToken.type,
             parser->currentToken.lexeme);
 
-    // Read the next token
     if (!readNextEntry(parser, &parser->currentToken)) {
         parser->hasMoreTokens = false;
     }
@@ -505,6 +528,58 @@ bool matchToken(Parser *parser, const char *expected) {
 // ============================================================================
 // ============================================================================
 
+static void printSourceSnippet(FILE *dest, const char *sourceFilePath, int targetLine, int targetCol, const char *lexeme, bool useColor) {
+    if (sourceFilePath == NULL || sourceFilePath[0] == '\0' || targetLine <= 0) {
+        return;
+    }
+
+    FILE *src = fopen(sourceFilePath, "r");
+    if (src == NULL) return;
+
+    char lineBuf[1024];
+    int currentLine = 0;
+    bool found = false;
+
+    while (fgets(lineBuf, sizeof(lineBuf), src) != NULL) {
+        currentLine++;
+        if (currentLine == targetLine) {
+            found = true;
+            break;
+        }
+    }
+    fclose(src);
+
+    if (!found) return;
+
+    size_t len = strlen(lineBuf);
+    while (len > 0 && (lineBuf[len - 1] == '\n' || lineBuf[len - 1] == '\r')) {
+        lineBuf[--len] = '\0';
+    }
+
+    fprintf(dest, "|  %4d | %s\n", targetLine, lineBuf);
+    fprintf(dest, "|       | ");
+
+    int col = (targetCol > 0) ? targetCol : 1;
+    for (int i = 0; i < col - 1 && (size_t)i < len; i++) {
+        fputc((lineBuf[i] == '\t') ? '\t' : ' ', dest);
+    }
+    for (int i = (int)len; i < col - 1; i++) {
+        fputc(' ', dest);
+    }
+
+    int underlineLen = (lexeme != NULL && lexeme[0] != '\0' && strcmp(lexeme, "(end of file)") != 0)
+                           ? (int)strlen(lexeme)
+                           : 1;
+
+    if (useColor) fprintf(dest, "\e[1;31m");
+    fputc('^', dest);
+    for (int i = 1; i < underlineLen; i++) {
+        fputc('~', dest);
+    }
+    if (useColor) fprintf(dest, "\e[0m");
+    fputc('\n', dest);
+}
+
 /*
 reportError - Reports a syntax error with the current token's position and a
               descriptive message about how to fix the issue.
@@ -521,26 +596,34 @@ void reportError(Parser *parser, const char *message) {
 
     const char *type = parser->hasMoreTokens ? parser->currentToken.type : "EOF";
     const char *lexeme = parser->hasMoreTokens ? parser->currentToken.lexeme : "(end of file)";
-    int line = parser->currentToken.lineNumber;
+    const char *file = parser->sourceFilePath[0] ? parser->sourceFilePath : "(source)";
+    int srcLine = parser->currentToken.sourceLine;
+    int srcCol = parser->currentToken.sourceColumn;
+    int symLine = parser->currentToken.symbolTableLine;
 
-    // Print to stderr with formatting
+    // Print to stderr
     fprintf(stderr, "\n");
     fprintf(stderr, "|==============================================================|\n");
-    fprintf(stderr, "|  \e[1;31mSYNTAX ERROR\e[0m                                                  |\n");
+    fprintf(stderr, "|  \e[1;31mSYNTAX ERROR\e[0m                                                |\n");
     fprintf(stderr, "|==============================================================|\n");
-    fprintf(stderr, "|  \e[1;33mLocation:\e[0m  Symbol Table Line %d                              \n", line);
-    fprintf(stderr, "|  \e[1;33mToken:\e[0m     %s (\"%s\")                              \n", type, lexeme);
+    fprintf(stderr, "|  \e[1;33mLocation:\e[0m  %s:%d:%d (Line %d, Column %d | Symbol Table Line %d)\n",
+            file, srcLine, srcCol, srcLine, srcCol, symLine);
+    fprintf(stderr, "|  \e[1;33mToken:\e[0m     %s (\"%s\")\n", type, lexeme);
     fprintf(stderr, "|  \e[1;33mProblem:\e[0m   %s\n", message);
-    fprintf(stderr, "|==============================================================|\n");
-    fprintf(stderr, "\n");
+    fprintf(stderr, "|\n");
+    printSourceSnippet(stderr, parser->sourceFilePath, srcLine, srcCol, lexeme, true);
+    fprintf(stderr, "|==============================================================|\n\n");
 
-    // Write to output file
+    // Write to parse trace file
     fprintf(parser->output, "\n  |==============================================================|\n");
-    fprintf(parser->output, "  |  SYNTAX ERROR                                                  |\n");
+    fprintf(parser->output, "  |  SYNTAX ERROR                                                |\n");
     fprintf(parser->output, "  |==============================================================|\n");
-    fprintf(parser->output, "  |  Location:  Symbol Table Line %d\n", line);
+    fprintf(parser->output, "  |  Location:  %s:%d:%d (Line %d, Column %d | Symbol Table Line %d)\n",
+            file, srcLine, srcCol, srcLine, srcCol, symLine);
     fprintf(parser->output, "  |  Token:     %s (\"%s\")\n", type, lexeme);
     fprintf(parser->output, "  |  Problem:   %s\n", message);
+    fprintf(parser->output, "  |\n");
+    printSourceSnippet(parser->output, parser->sourceFilePath, srcLine, srcCol, lexeme, false);
     fprintf(parser->output, "  |==============================================================|\n\n");
 }
 
@@ -811,9 +894,9 @@ bool parseSimpleStatement(Parser *parser) {
     const char *exprStart[] = {
         "INT_LITERAL", "FLOAT_LITERAL", "STRING_LITERAL", "CHAR_LITERAL",
         "TRUE", "FALSE", "NULL", "LPAREN", "LBRACKET", "LBRACE",
-        "LOGICAL_NOT", "SUBTRACTION", "IDENTIFIER"
+        "LOGICAL_NOT", "SUBTRACTION", "IDENTIFIER", "READLINE", "READINT"
     };
-    if (checkTokenAny(parser, exprStart, 13)) {
+    if (checkTokenAny(parser, exprStart, 15)) {
         parseExpression(parser);
         return true;
     }
@@ -2202,8 +2285,11 @@ bool parsePrimaryExpr(Parser *parser) {
         return true;
     }
 
-    // Identifier (variable, function call, or array access)
-    if (checkToken(parser, "IDENTIFIER")) {
+    // Identifier or built-in I/O function (variable, function call, or array access)
+    if (checkToken(parser, "IDENTIFIER") ||
+        checkToken(parser, "READLINE") ||
+        checkToken(parser, "READINT")) {
+        bool isBuiltin = checkToken(parser, "READLINE") || checkToken(parser, "READINT");
         fprintf(parser->output, "        Identifier: %s", parser->currentToken.lexeme);
         char idName[256];
         strncpy(idName, parser->currentToken.lexeme, sizeof(idName) - 1);
@@ -2253,6 +2339,11 @@ bool parsePrimaryExpr(Parser *parser) {
         }
 
         fprintf(parser->output, "\n");
+        if (isBuiltin) {
+            reportError(parser, "Expected '(' after built-in input function. "
+                                "Use readLine() or readInt().");
+            return false;
+        }
         return true;
     }
 
@@ -2286,14 +2377,14 @@ Parameters:
 Returns:
     bool - true if parsing completed successfully (no syntax errors).
 */
-bool parseSourceFile(const char *symbolTablePath, const char *outputPath) {
+bool parseSourceFile(const char *sourceFilePath, const char *symbolTablePath, const char *outputPath) {
     if (symbolTablePath == NULL || outputPath == NULL) {
         fprintf(stderr, "Error: Invalid file paths provided to parser.\n");
         return false;
     }
 
     Parser parser;
-    if (!initParser(&parser, symbolTablePath, outputPath)) {
+    if (!initParser(&parser, sourceFilePath, symbolTablePath, outputPath)) {
         fprintf(stderr, "Error: Failed to initialize parser.\n");
         return false;
     }

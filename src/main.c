@@ -16,8 +16,7 @@
 // FUNCTION PROTOTYPES
 // ============================================================================
 static int runLexer(const char *inputFileName, const char *symbolTableFilePath, const char *transitionTraceOutputPath);
-static int runParser(const char *symbolTableFilePath, const char *parseOutputPath);
-
+static int runParser(const char *inputFileName, const char *symbolTableFilePath, const char *parseOutputPath);
 // ============================================================================
 // MAIN — Entry point
 // ============================================================================
@@ -76,7 +75,7 @@ int main(int argc, char *argv[]) {
     printf("  PHASE 2: SYNTAX ANALYSIS (Recursive Descent Parser)\n");
     printf("===============================================================\n\n");
 
-    int parseResult = runParser(symbolTableFilePath, parseOutputPath);
+    int parseResult = runParser(inputFileName, symbolTableFilePath, parseOutputPath);
 
     /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
      *  SUMMARY
@@ -130,12 +129,17 @@ static int runLexer(const char *inputFileName, const char *symbolTableFilePath, 
     }
 
     // Write symbol table header
-    fprintf(output, "%-32s | %-50s | %-70s\n",
-            "           TOKEN TYPE", "                    LEXEME",
-            "                       STATE TRANSITIONS");
-    fprintf(output, "=================================|"
+    fprintf(output, "%-6s | %-6s | %-32s | %-50s | %-80s\n",
+            "LINE", "COL",
+            "           TOKEN TYPE",
+            "                    LEXEME",
+            "                            STATE TRANSITIONS");
+    fprintf(output, "=======|========|"
+                    "==================================|"
                     "====================================================|"
-                    "=======================================================================\n");
+                    "=================================================================================\n");
+
+    resetLexerPosition();
 
     // Tokenize the input file
     Token t;
@@ -153,7 +157,7 @@ static int runLexer(const char *inputFileName, const char *symbolTableFilePath, 
             return 1;
         }
 
-        printSymbolTableRow(output, tokenType, lexeme, t.transitions);
+        printSymbolTableRow(output, t.line, t.column, tokenType, lexeme, t.transitions);
         tokenCount++;
         free(lexeme);
     } while (t.type != TOKEN_EOF);
@@ -170,10 +174,10 @@ static int runLexer(const char *inputFileName, const char *symbolTableFilePath, 
 // ============================================================================
 // runParser — Phase 2: Recursive Descent Parsing of the symbol table
 // ============================================================================
-static int runParser(const char *symbolTableFilePath, const char *parseOutputPath) {
+static int runParser(const char *inputFileName, const char *symbolTableFilePath, const char *parseOutputPath) {
     printf("Parsing symbol table: %s\n\n", symbolTableFilePath);
 
-    bool success = parseSourceFile(symbolTableFilePath, parseOutputPath);
+    bool success = parseSourceFile(inputFileName, symbolTableFilePath, parseOutputPath);
 
     if (success) {
         printf("  \e[1;32m✓ Syntax analysis complete — No syntax errors.\e[0m\n");

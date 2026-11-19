@@ -26,7 +26,9 @@ typedef struct {
     char type[64];          // Token type name (e.g. "INT", "IDENTIFIER", "SEMICOLON")
     char lexeme[256];       // The actual source text of the token
     char transitions[512];  // DFA state transition path from the lexer
-    int lineNumber;         // Line number in the symbol table file
+    int sourceLine;         // Line number in the original .fdls file
+    int sourceColumn;       // Column number in the original .fdls file
+    int symbolTableLine;    // Line number in symbol_table.txt
 } SymbolEntry;
 
 // ============================================================================
@@ -39,6 +41,8 @@ typedef struct {
 typedef struct {
     FILE *symbolTable;          // Input: symbol table file (lexer output)
     FILE *output;               // Output: parse trace / results file
+    char sourceFilePath[256];   // Path to the original .fdls source file
+    int symbolTableLine;        // Current line cursor in symbol_table.txt
     SymbolEntry currentToken;   // The token currently being examined
     bool hasMoreTokens;         // Whether there are more tokens to read
     bool encounteredError;      // Whether a syntax error has been encountered
@@ -62,7 +66,7 @@ Parameters:
 Returns:
     bool - true if initialization succeeded, false on error.
 */
-bool initParser(Parser *parser, const char *symTablePath, const char *outputPath);
+bool initParser(Parser *parser, const char *sourceFilePath, const char *symTablePath, const char *outputPath);
 
 /*
 advanceToken - Consumes the current token and reads the next one from the
@@ -106,7 +110,7 @@ Parameters:
 Returns:
     bool - true if parsing completed successfully (no syntax errors).
 */
-bool parseSourceFile(const char *symbolTablePath, const char *outputPath);
+bool parseSourceFile(const char *sourceFilePath, const char *symbolTablePath, const char *outputPath);
 
 // ============================================================================
 // TOKEN MATCHING HELPERS

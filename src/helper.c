@@ -91,13 +91,15 @@ char* escapeCharacter(char c) {
 }
 
 // Auto-wrapping table printer
-void printSymbolTableRow(FILE* out, const char* type, const char* lexeme, const char* transitions) {
-    const int TYPE_WIDTH = 32;
-    const int LEX_WIDTH  = 50;
+void printSymbolTableRow(FILE* out, int line, int column, const char* type, const char* lexeme, const char* transitions) {
+    const int LINE_WIDTH  = 6;
+    const int COL_WIDTH   = 6;
+    const int TYPE_WIDTH  = 32;
+    const int LEX_WIDTH   = 50;
     const int TRANS_WIDTH = 80; // Wraps transitions so they don't stretch infinitely
-    
-    int lexLen = strlen(lexeme);
-    int transLen = strlen(transitions);
+
+    int lexLen = (lexeme != NULL) ? (int)strlen(lexeme) : 0;
+    int transLen = (transitions != NULL) ? (int)strlen(transitions) : 0;
     int lexPos = 0, transPos = 0;
     int isFirstLine = 1;
 
@@ -107,14 +109,23 @@ void printSymbolTableRow(FILE* out, const char* type, const char* lexeme, const 
     const char *reset = (out == stdout) ? "\e[0m" : "";
 
     while (lexPos < lexLen || transPos < transLen || isFirstLine) {
-        // --- COLUMN 1: TOKEN TYPE ---
+        // --- COLUMNS 1 & 2: LINE & COLUMN ---
+        if (isFirstLine) {
+            fprintf(out, "%s%-*d%s | %s%-*d%s | ",
+                    color, LINE_WIDTH, line, reset,
+                    color, COL_WIDTH, column, reset);
+        } else {
+            fprintf(out, "%*s | %*s | ", LINE_WIDTH, "", COL_WIDTH, "");
+        }
+
+        // --- COLUMN 3: TOKEN TYPE ---
         if (isFirstLine) {
             fprintf(out, "%s%-*s%s | ", color, TYPE_WIDTH, type, reset);
         } else {
             fprintf(out, "%*s | ", TYPE_WIDTH, ""); // Empty space for wrapped lines
         }
 
-        // --- COLUMN 2: LEXEME ---
+        // --- COLUMN 4: LEXEME ---
         char lexChunk[256] = {0};
         if (lexPos < lexLen) {
             int chunkLen = (lexLen - lexPos > LEX_WIDTH) ? LEX_WIDTH : (lexLen - lexPos);
@@ -123,7 +134,7 @@ void printSymbolTableRow(FILE* out, const char* type, const char* lexeme, const 
         }
         fprintf(out, "%s%-*s%s | ", color, LEX_WIDTH, lexChunk, reset);
 
-        // --- COLUMN 3: STATE TRANSITIONS ---
+        // --- COLUMN 5: STATE TRANSITIONS ---
         char transChunk[256] = {0};
         if (transPos < transLen) {
             int chunkLen = (transLen - transPos > TRANS_WIDTH) ? TRANS_WIDTH : (transLen - transPos);
@@ -133,7 +144,7 @@ void printSymbolTableRow(FILE* out, const char* type, const char* lexeme, const 
         } else {
             fprintf(out, "\n");
         }
-        
+
         isFirstLine = 0;
     }
 }

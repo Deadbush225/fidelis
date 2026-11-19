@@ -156,6 +156,8 @@ typedef struct {
     TokenType type;
     char lexeme[256];      // Increased from 33 to support string/comment content
     char transitions[512]; // Records the DFA state transition path (e.g., STATE_START -> STATE_V -> ...)
+    int line;              // Starting line number in the .fdls source file (1-based)
+    int column;            // Starting column number in the .fdls source file (1-based)
 } Token;
 
 // ============================================================================
@@ -164,6 +166,7 @@ typedef struct {
 
 extern bool lexerLoggingEnabled;
 
+void resetLexerPosition(void);
 Token getNextToken(FILE *source, FILE *transition);
 const char* getTokenTypeName(TokenType type);
 

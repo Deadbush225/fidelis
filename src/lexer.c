@@ -6,6 +6,39 @@
 
 bool lexerLoggingEnabled = false;
 
+static int currentLine = 1;
+static int currentCol = 1;
+static int prevLineCol = 1;
+
+void resetLexerPosition(void) {
+    currentLine = 1;
+    currentCol = 1;
+    prevLineCol = 1;
+}
+
+static int readChar(FILE *source) {
+    int ch = fgetc(source);
+    if (ch == '\n') {
+        prevLineCol = currentCol;
+        currentLine++;
+        currentCol = 1;
+    } else if (ch != EOF && ch != '\r') {
+        currentCol++;
+    }
+    return ch;
+}
+
+static void unreadChar(int ch, FILE *source) {
+    if (ch == EOF) return;
+    ungetc(ch, source);
+    if (ch == '\n') {
+        currentLine--;
+        currentCol = prevLineCol;
+    } else if (ch != '\r') {
+        currentCol--;
+    }
+}
+
 // ============================================================================
 // EXTENDED DFA STATES FOR FULL FIDELIS LEXICAL SPECIFICATION
 // ============================================================================
@@ -165,7 +198,7 @@ typedef enum {
         state = STATE_IN_IDENTIFIER; \
         CONSUME_CHAR(c); \
     } else { \
-        ungetc(c, source); \
+        unreadChar(c, source); \
         ACCEPT_LEXEME(_token_type); \
     }
 
@@ -413,6 +446,8 @@ Token getNextToken(FILE *source, FILE *transition) {
     int lexemeIdx = 0;
     int escaped = 0;
     token.transitions[0] = '\0'; // Initialize empty DFA state transition trace
+    token.line = currentLine;
+    token.column = currentCol;
     LexerState state = STATE_START;
     int c;
 
@@ -422,11 +457,19 @@ Token getNextToken(FILE *source, FILE *transition) {
     }
     
     while (state != STATE_DONE) {
-        c = fgetc(source);
+        int charLine = currentLine;
+        int charCol = currentCol;
+        c = readChar(source);
         
         // Skip leading whitespace between tokens without recording a state transition
         if (state == STATE_START && isspace(c)) {
             continue;
+        }
+
+        // Record the exact starting position of the first character of this token
+        if (state == STATE_START) {
+            token.line = charLine;
+            token.column = charCol;
         }
 
         // Record the initial STATE_START once the first token byte is encountered
@@ -675,7 +718,7 @@ Token getNextToken(FILE *source, FILE *transition) {
                         ACCEPT_LEXEME(TOKEN_DIVIDE_ASSIGN);
                         break;
                     default:
-                        ungetc(c, source);
+                        unreadChar(c, source);
                         // Restore the initial '/' that was cleared, then accept
                         token.lexeme[0] = '/';
                         lexemeIdx = 1;
@@ -688,7 +731,7 @@ Token getNextToken(FILE *source, FILE *transition) {
                 switch (c) {
                     case EOF:
                     case '\n':
-                        ungetc(c, source);
+                        unreadChar(c, source);
                         ACCEPT_LEXEME(TOKEN_LINE_COMMENT);
                         break;
                     default:
@@ -746,7 +789,7 @@ Token getNextToken(FILE *source, FILE *transition) {
                     state = STATE_ERR_INVALID_NUMBER;
                     CONSUME_CHAR(c);
                 } else {
-                    ungetc(c, source);
+                    unreadChar(c, source);
                     ACCEPT_LEXEME(TOKEN_INT_LITERAL);
                 }
                 break;
@@ -758,7 +801,7 @@ Token getNextToken(FILE *source, FILE *transition) {
                 } else {
                     state = STATE_ERR_MALFORMED_FLOAT;
                     appendTransition(&token, state);
-                    ungetc(c, source);
+                    unreadChar(c, source);
                     ACCEPT_LEXEME(TOKEN_ERR_MALFORMED_FLOAT);
                 }
                 break;
@@ -770,7 +813,7 @@ Token getNextToken(FILE *source, FILE *transition) {
                     state = STATE_ERR_INVALID_NUMBER;
                     CONSUME_CHAR(c);
                 } else {
-                    ungetc(c, source);
+                    unreadChar(c, source);
                     ACCEPT_LEXEME(TOKEN_FLOAT_LITERAL);
                 }
                 break;
@@ -856,7 +899,7 @@ Token getNextToken(FILE *source, FILE *transition) {
                         ACCEPT_LEXEME(TOKEN_ADD_ASSIGN);
                         break;
                     default:
-                        ungetc(c, source);
+                        unreadChar(c, source);
                         ACCEPT_LEXEME(TOKEN_ADDITION);
                         break;
                 }
@@ -873,7 +916,7 @@ Token getNextToken(FILE *source, FILE *transition) {
                         ACCEPT_LEXEME(TOKEN_SUBTRACT_ASSIGN);
                         break;
                     default:
-                        ungetc(c, source);
+                        unreadChar(c, source);
                         ACCEPT_LEXEME(TOKEN_SUBTRACTION);
                 }
                 break;
@@ -885,7 +928,7 @@ Token getNextToken(FILE *source, FILE *transition) {
                         ACCEPT_LEXEME(TOKEN_MULTIPLY_ASSIGN);
                         break;
                     default:
-                        ungetc(c, source);
+                        unreadChar(c, source);
                         ACCEPT_LEXEME(TOKEN_MULTIPLICATION);
                 }
                 break;
@@ -897,7 +940,7 @@ Token getNextToken(FILE *source, FILE *transition) {
                         ACCEPT_LEXEME(TOKEN_MODULO_ASSIGN);
                         break;
                     default:
-                        ungetc(c, source);
+                        unreadChar(c, source);
                         ACCEPT_LEXEME(TOKEN_MODULO);
                 }
                 break;
@@ -915,7 +958,7 @@ Token getNextToken(FILE *source, FILE *transition) {
                     default:
                         state = STATE_ERR_INVALID_OPERATOR;
                         appendTransition(&token, state);
-                        ungetc(c, source);
+                        unreadChar(c, source);
                         ACCEPT_LEXEME(TOKEN_ERR_INVALID_OPERATOR);
                 }
                 break;
@@ -929,7 +972,7 @@ Token getNextToken(FILE *source, FILE *transition) {
                     default:
                         state = STATE_ERR_INVALID_OPERATOR;
                         appendTransition(&token, state);
-                        ungetc(c, source);
+                        unreadChar(c, source);
                         ACCEPT_LEXEME(TOKEN_ERR_INVALID_OPERATOR);
                         break;
                 }
@@ -942,7 +985,7 @@ Token getNextToken(FILE *source, FILE *transition) {
                         ACCEPT_LEXEME(TOKEN_EQUALITY);
                         break;
                     default:
-                        ungetc(c, source);
+                        unreadChar(c, source);
                         ACCEPT_LEXEME(TOKEN_ASSIGNMENT);
                         break;
                 }
@@ -955,7 +998,7 @@ Token getNextToken(FILE *source, FILE *transition) {
                         ACCEPT_LEXEME(TOKEN_INEQUALITY);
                         break;
                     default:
-                        ungetc(c, source);
+                        unreadChar(c, source);
                         ACCEPT_LEXEME(TOKEN_LOGICAL_NOT);
                         break;
                 }
@@ -968,7 +1011,7 @@ Token getNextToken(FILE *source, FILE *transition) {
                         ACCEPT_LEXEME(TOKEN_LESS_EQUAL);
                         break;
                     default:
-                        ungetc(c, source);
+                        unreadChar(c, source);
                         ACCEPT_LEXEME(TOKEN_LESS_THAN);
                         break;
                 }
@@ -981,7 +1024,7 @@ Token getNextToken(FILE *source, FILE *transition) {
                         ACCEPT_LEXEME(TOKEN_GREATER_EQUAL);
                         break;
                     default:
-                        ungetc(c, source);
+                        unreadChar(c, source);
                         ACCEPT_LEXEME(TOKEN_GREATER_THAN);
                         break;
                 }
@@ -1198,7 +1241,7 @@ Token getNextToken(FILE *source, FILE *transition) {
                     }
                     CONSUME_CHAR(c);
                 } else {
-                    ungetc(c, source);
+                    unreadChar(c, source);
                     ACCEPT_LEXEME(TOKEN_IDENTIFIER);
                 }
                 break;
@@ -1207,7 +1250,7 @@ Token getNextToken(FILE *source, FILE *transition) {
                 if (isalnum(c) || c == '_' || c == '.') {
                     CONSUME_CHAR(c);
                 } else {
-                    ungetc(c, source);
+                    unreadChar(c, source);
                     ACCEPT_LEXEME(TOKEN_ERR_INVALID_NUMBER);
                 }
                 break;
@@ -1219,7 +1262,7 @@ Token getNextToken(FILE *source, FILE *transition) {
                     if (c == '\'') {
                         CONSUME_CHAR(c);
                     } else {
-                        ungetc(c, source);
+                        unreadChar(c, source);
                     }
                     ACCEPT_LEXEME(TOKEN_ERR_CHAR_TOO_LONG);
                 }
@@ -1229,7 +1272,7 @@ Token getNextToken(FILE *source, FILE *transition) {
                 if (isalnum(c) || c == '_') {
                     CONSUME_CHAR(c);
                 } else {
-                    ungetc(c, source);
+                    unreadChar(c, source);
                     ACCEPT_LEXEME(TOKEN_ERR_IDENTIFIER_TOO_LONG);
                 }
                 break;
