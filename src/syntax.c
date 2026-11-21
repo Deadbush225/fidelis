@@ -573,9 +573,13 @@ bool parsePrintStmt(Parser *parser) {
     //   2. Variable:       print(x);
     //   3. Concatenation:  print("Value: " + x);
     REQUIRE(parseExpression(parser));
+    
+    if (OPT("COMMA")) {
+        REQUIRE(parseExpression(parser));
+    }
+    
     EXPECT("RPAREN", "Expected ')' to close the print() call. "
-                     "Syntax: print(expression);");
-
+            "Syntax: print(expression);");
     PASS();
 }
 

@@ -55,7 +55,7 @@ fn factorial(int n) : int {
 state Boot {
     print("\n--- SYSTEM LOCKED ---");
     print("Hint: Master PIN is " + masterPin + " (try typing 'abc' to test ensure)");
-    print("Enter 4-digit numeric PIN:");
+    print("Enter 4-digit numeric PIN:", "");
 
     int? input = readInt();
 
@@ -85,7 +85,7 @@ state Dashboard {
     print("6: Shutdown System");
 
     loop do {
-        print("\nSelect an action (1-6):");
+        print("\nSelect an action (1-6):", "");
 
         // Pipeline used for string manipulation
         string choice = readLine() |> removeSpaces();
@@ -114,7 +114,7 @@ state TempControl {
     print("\nCurrent temperature is " + roomTemp + "C.");
 
     loop {
-        print("Enter new target temperature (16-30, or -99 to cancel):");
+        print("Enter new target temperature (16-30, or -99 to cancel):", "");
 
         int? newTemp = readInt();
 
@@ -155,7 +155,7 @@ state StatusView {
     print("Raw array output:");
     print(accessLogs);
 
-    print("\nPress Enter to return to Dashboard.");
+    print("\nPress Enter to return to Dashboard.", "");
     string wait = readLine();
 
     transition to Dashboard;
@@ -196,7 +196,7 @@ state LanguageFeatureShowcase {
     print("optionalScore == null -> " + isMissing + ", optionalWeight != null -> " + hasWeight);
 
     // C. String input + multi-stage pipeline with extra arguments + ensure
-    print("\nEnter your name (try 'Ada' or include extra spaces):");
+    print("\nEnter your name (try 'Ada' or include extra spaces):", "");
     string? optionalName = readLine();
 
     string confirmedName = ensure optionalName else {
@@ -235,7 +235,7 @@ state LanguageFeatureShowcase {
     if (charOrder) print("Single-statement if branch executed.");
 
     // G. Interactive numeric input -> recursion + signed match expression
-    print("\nEnter an integer between -1 and 6 (or type text to test ensure fallback):");
+    print("\nEnter an integer between -1 and 6 (or type text to test ensure fallback):", "");
     int? rawNum = readInt();
 
     int n = ensure rawNum else {
@@ -271,7 +271,7 @@ state LanguageFeatureShowcase {
         _ -> print("Welcome, " + confirmedName + "!");
     }
 
-    print("\nShowcase complete. Press Enter to return to Dashboard.");
+    print("\nShowcase complete. Press Enter to return to Dashboard.", "");
     string done = readLine();
     transition to Dashboard;
 }

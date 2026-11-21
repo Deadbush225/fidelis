@@ -1280,11 +1280,33 @@ static void execPrintStmt(Interpreter *ip, const ParseNode *node) {
         freeValue(val);
         return;
     }
+
+    const ParseNode *endExpr = firstMeaningfulAfter(node, "COMMA", 0);
+    if (endExpr == NULL) {
+        char *text = valueToString(val);
+        printf("%s\n", text);
+        fflush(stdout);
+        free(text);
+        freeValue(val);
+        return;
+    }
+
+    Value endVal = evalExpression(ip, endExpr);
+    if (ip->hadRuntimeError) {
+        freeValue(val);
+        freeValue(endVal);
+        return;
+    }
+
     char *text = valueToString(val);
-    printf("%s\n", text);
+    char *endText = valueToString(endVal);
+    printf("%s%s", text, endText);
     fflush(stdout);
+
     free(text);
+    free(endText);
     freeValue(val);
+    freeValue(endVal);
 }
 
 static void execSleepStmt(Interpreter *ip, const ParseNode *node) {
