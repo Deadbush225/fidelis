@@ -3,6 +3,7 @@
 #endif
 
 #include "interpreter.h"
+#include "semantic.h"
 #include <ctype.h>
 #include <errno.h>
 #include <math.h>
@@ -23,6 +24,8 @@
 static void execStatement(Interpreter *ip, const ParseNode *node);
 static void execBlock(Interpreter *ip, const ParseNode *blockNode, bool createScope);
 static Value evalExpression(Interpreter *ip, const ParseNode *node);
+static Value makeArray(size_t initialCap);
+static void arrayPush(ArrayObject *arr, Value val);
 
 // ============================================================================
 // PORTABLE HELPERS (STRINGS & SLEEP)
@@ -95,6 +98,29 @@ static Value makeStringOwned(char *ownedStr) {
 
 static Value makeStringCopy(const char *s) {
     return makeStringOwned(dupString(s));
+}
+
+static Value defaultValueForType(const ParseNode *typeNode) {
+    if (typeNode == NULL) return makeNull();
+    if (findChild(typeNode, "QUESTION", 0) != NULL) return makeNull();
+
+    const ParseNode *innerType = findChild(typeNode, "Type", 0);
+    if (innerType != NULL) {
+        const ParseNode *sizeNode = findChild(typeNode, "INT_LITERAL", 0);
+        long long sz = (sizeNode != NULL) ? strtoll(nodeLexeme(sizeNode), NULL, 10) : 0;
+        Value arr = makeArray((size_t)(sz > 0 ? sz : 0));
+        for (long long i = 0; i < sz; i++) {
+            arrayPush(arr.as.arrVal, defaultValueForType(innerType));
+        }
+        return arr;
+    }
+
+    if (findChild(typeNode, "INT", 0) != NULL)    return makeInt(0);
+    if (findChild(typeNode, "FLOAT", 0) != NULL)  return makeFloat(0.0);
+    if (findChild(typeNode, "BOOL", 0) != NULL)   return makeBool(false);
+    if (findChild(typeNode, "CHAR", 0) != NULL)   return makeChar('\0');
+    if (findChild(typeNode, "STRING", 0) != NULL) return makeStringCopy("");
+    return makeNull();
 }
 
 static Value makeArray(size_t initialCap) {
@@ -1124,14 +1150,42 @@ static Value evalExpression(Interpreter *ip, const ParseNode *node) {
 // STATEMENT EXECUTION
 // ============================================================================
 static void execVarDecl(Interpreter *ip, const ParseNode *node) {
+    const ParseNode *typeNode = findChild(node, "Type", 0);
     const ParseNode *nameNode = findChild(node, "IDENTIFIER", 0);
     const ParseNode *initExpr = firstMeaningfulAfter(node, "ASSIGNMENT", 0);
 
+    const ParseNode *innerType = findChild(typeNode, "Type", 0);
+    const ParseNode *sizeNode  = findChild(typeNode, "INT_LITERAL", 0);
+    long long fixedSize = (sizeNode != NULL) ? strtoll(nodeLexeme(sizeNode), NULL, 10) : -1;
+
+    // Case 1: Empty fixed-size array -> [int, 10] scores;
+    if (initExpr == NULL) {
+        Value val = defaultValueForType(typeNode);
+        envDefine(ip->currentEnv, nodeLexeme(nameNode), val);
+        return;
+    }
+
+    // Case 2: Initialized variable or array
     Value val = evalExpression(ip, initExpr);
     if (ip->hadRuntimeError) {
         freeValue(val);
         return;
     }
+
+    // Pad partial fixed-size initializers (e.g., [int, 10] scores = [90, 85, 88];)
+    if (fixedSize > 0 && val.kind == VAL_ARRAY && val.as.arrVal != NULL) {
+        if (val.as.arrVal->count > (size_t)fixedSize) {
+            runtimeError(ip, initExpr,
+                         "Array initializer length (%zu) exceeds fixed size (%lld) of '%s'.",
+                         val.as.arrVal->count, fixedSize, nodeLexeme(nameNode));
+            freeValue(val);
+            return;
+        }
+        while (val.as.arrVal->count < (size_t)fixedSize) {
+            arrayPush(val.as.arrVal, defaultValueForType(innerType));
+        }
+    }
+
     envDefine(ip->currentEnv, nodeLexeme(nameNode), val);
 }
 

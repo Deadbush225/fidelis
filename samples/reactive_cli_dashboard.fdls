@@ -4,7 +4,7 @@
   reactive status panels, and command-line workflow control
  */
 
-const int MAX_WORKERS is = 10;
+int MAX_WORKERS is = 10;
 int adminCode = 2026;
 int activeWorkers = 3;
 int cpuUsage = 45;
@@ -19,32 +19,32 @@ string? lastCommand = null;
 [int] openPorts = [80, 443, 8080];
 [int, 3] nodeLoads = [35, 45, 55];
 
-react (cpuUsage) -> {
+react (cpuUsage) {
     printLine("[CLI UI] CPU usage changed to " + cpuUsage + "%");
 }
 
-react (activeWorkers) -> {
+react (activeWorkers) {
     printLine("[CLI UI] Active workers scaled to " + activeWorkers);
 }
 
-react (serverOnline) -> {
+react (serverOnline) {
     printLine("[CLI UI] Server online state updated.");
 }
 
-task calculateLoadPerWorker(int totalLoad, int workers) : int {
+fn calculateLoadPerWorker(int totalLoad, int workers) : int {
     int baseLoad = (totalLoad \ workers) + (totalLoad % workers);
     int overhead = 2 ^ 2;
     return baseLoad + overhead;
 }
 
-task calculateThroughput(int requests, float hours) : float {
+fn calculateThroughput(int requests, float hours) : float {
     float baseRate = (requests * 1.0) / hours;
     float adjustedRate = baseRate - 0.5;
     return adjustedRate;
 }
 
-task healthLabel(int usage) : string {
-    if (usage == 0) do {
+fn healthLabel(int usage) : string {
+    if (usage == 0) {
         return "IDLE";
     } else if (usage <= 50) {
         return "HEALTHY";

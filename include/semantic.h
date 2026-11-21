@@ -27,6 +27,7 @@ typedef enum {
 typedef struct {
     BaseType base;
     int arrayDepth;    // 0 = scalar, 1 = [T], 2 = [[T]], ...
+    int fixedSize;     // -1 = inferred/dynamic, > 0 = fixed size [T, N]
     bool isNullable;   // Outer nullability: e.g., int?, [int]?
     bool elemNullable; // Inner element nullability: e.g., [int?]
 } SemType;
@@ -108,5 +109,7 @@ formatSemType - Formats a SemType into human-readable Fidelis syntax
                 (e.g., "int", "string?", "[int]", "[int]?").
 */
 void formatSemType(SemType type, char *buf, size_t bufSize);
+static const ParseNode *findChild(const ParseNode *node, const char *label, size_t occurrence);
+static const char *nodeLexeme(const ParseNode *node);
 
 #endif // SEMANTIC_H

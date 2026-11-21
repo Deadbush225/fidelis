@@ -29,6 +29,7 @@ fn binarySearch([int] values, int target) : int {
             high = middle - 1;
         }
     }
+    return -1; // Not found
 }
 
 [int, 7] values = [3, 8, 14, 21, 29, 42, 57];

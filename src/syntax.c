@@ -333,15 +333,27 @@ static bool parseDeclPrefix(Parser *parser) {
 }
 
 // Handles both top-level/block declarations:
-//   VarDecl    = Type, Identifier, [ "is" ], "=", Expression, ";" ;
-//   EnsureStmt = Type, Identifier, [ "is" ], "=", "ensure", Expression, "else", Block ;
+//   VarDecl = Type, Identifier, [ "=", Expression ] ;
+//   EnsureStmt = Type, Identifier, [ "=", "ensure", Expression, "else", Block ;
 bool parseDeclOrEnsureStmt(Parser *parser) {
     GUARD(parser);
     NODE("SimpleStatement");
     ParseNode *kindNode = parser->currentNode;
     NODE("VarDecl");
     ParseNode *declNode = parser->currentNode;
-    REQUIRE(parseDeclPrefix(parser));
+
+    REQUIRE(parseType(parser));
+    EXPECT_LOG("IDENTIFIER", "Variable", "Expected a variable name after type.");
+
+    // Uninitialized declaration: e.g., [int, 10] scores;
+    if (checkToken(parser, "SEMICOLON")) {
+        parser->currentNode = _prevNode;
+        EXPECT_SEMI("Expected ';' after variable declaration.", "declaration termination");
+        PASS();
+    }
+
+    OPT_NOISE("is");
+    EXPECT("ASSIGNMENT", "Expected '=' or ';' after variable name in declaration.");
 
     if (OPT("ENSURE")) {
         strncpy(kindNode->label, "BlockStatement", sizeof(kindNode->label) - 1);
@@ -355,7 +367,7 @@ bool parseDeclOrEnsureStmt(Parser *parser) {
 
     REQUIRE(parseExpression(parser));
     parser->currentNode = _prevNode;
-    EXPECT_SEMI("Expected ';' after statement.", "declaration termination");
+    EXPECT_SEMI("Expected ';' after variable declaration.", "declaration termination");
     PASS();
 }
 
@@ -363,8 +375,13 @@ bool parseDeclOrEnsureStmt(Parser *parser) {
 bool parseVarDecl(Parser *parser) {
     GUARD(parser);
     NODE("VarDecl");
-    REQUIRE(parseDeclPrefix(parser));
-    REQUIRE(parseExpression(parser));
+    REQUIRE(parseType(parser));
+    EXPECT_LOG("IDENTIFIER", "Variable", "Expected a variable name after type.");
+
+    if (OPT_NOISE("is") || checkToken(parser, "ASSIGNMENT")) {
+        EXPECT("ASSIGNMENT", "Expected '=' in variable declaration.");
+        REQUIRE(parseExpression(parser));
+    }
     PASS();
 }
 
@@ -486,9 +503,9 @@ bool parseArgList(Parser *parser) {
 // --------------------------------------------------------------------------
 // TYPE
 // 
-// Type = "int" | "float" | "string" | "bool" | "char"
-//      | "int?" | "float?" | "string?" | "bool?" | "char?"
-//      | "[", Type, "]", ["?"] ;
+// Type    = "int" | "float" | "string" | "bool" | "char"
+// | "int?" | "float?" | "string?" | "bool?" | "char?"
+// | "[", Type, [ ",", IntLiteral ], "]", [ "?" ] ;
 // --------------------------------------------------------------------------
 bool parseType(Parser *parser) {
     GUARD(parser);
@@ -496,6 +513,9 @@ bool parseType(Parser *parser) {
 
     if (OPT("LBRACKET")) {
         REQUIRE(parseType(parser));
+        if (OPT("COMMA")) {
+            EXPECT("INT_LITERAL", "Expected an integer size after ',' in fixed-size array type.");
+        }
         EXPECT("RBRACKET", "Expected ']' to close array type.");
         OPT("QUESTION");
         PASS();

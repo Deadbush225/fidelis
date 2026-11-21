@@ -1,5 +1,5 @@
 //Scans an integer array to find both the smallest and largest values.
-[int] scores = [67, 6, 7, 9, 6, 96, 99]
+[int] scores = [67, 6, 7, 9, 6, 96, 99];
 int totalItems = scores.length;
 
 int minimum = scores[0];

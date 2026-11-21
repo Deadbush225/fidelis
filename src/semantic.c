@@ -34,6 +34,7 @@ static SemType makeType(BaseType base, int arrayDepth, bool isNullable, bool ele
     SemType t;
     t.base = base;
     t.arrayDepth = arrayDepth;
+    t.fixedSize = -1;
     t.isNullable = isNullable;
     t.elemNullable = elemNullable;
     return t;
@@ -188,7 +189,11 @@ void formatSemType(SemType type, char *buf, size_t bufSize) {
 
     char tmp[128];
     for (int d = 0; d < type.arrayDepth; d++) {
-        snprintf(tmp, sizeof(tmp), "[%s]", inner);
+        if (d == type.arrayDepth - 1 && type.fixedSize > 0) {
+            snprintf(tmp, sizeof(tmp), "[%s, %d]", inner, type.fixedSize);
+        } else {
+            snprintf(tmp, sizeof(tmp), "[%s]", inner);
+        }
         strncpy(inner, tmp, sizeof(inner) - 1);
         inner[sizeof(inner) - 1] = '\0';
     }
@@ -484,6 +489,17 @@ static SemType resolveTypeNode(SemanticAnalyzer *sa, const ParseNode *typeNode) 
         }
         arr.arrayDepth = inner.arrayDepth + 1;
         arr.isNullable = outerNullable;
+        arr.fixedSize = -1;
+
+        const ParseNode *sizeNode = findChild(typeNode, "INT_LITERAL", 0);
+        if (sizeNode != NULL) {
+            long long sz = strtoll(nodeLexeme(sizeNode), NULL, 10);
+            if (sz <= 0) {
+                semError(sa, sizeNode, "Fixed-size array length must be a positive integer, got %lld.", sz);
+                return makeErrorType();
+            }
+            arr.fixedSize = (int)sz;
+        }
         return arr;
     }
 
@@ -1131,15 +1147,42 @@ static void analyzeVarDecl(SemanticAnalyzer *sa, const ParseNode *node) {
     const ParseNode *initExpr = firstMeaningfulAfter(node, "ASSIGNMENT", 0);
 
     SemType declType = resolveTypeNode(sa, typeNode);
-    SemType initType = analyzeExpression(sa, initExpr);
 
-    if (!isAssignable(declType, initType)) {
-        char dBuf[64], iBuf[64];
-        formatSemType(declType, dBuf, sizeof(dBuf));
-        formatSemType(initType, iBuf, sizeof(iBuf));
-        semError(sa, initExpr ? initExpr : node,
-                 "Cannot initialize variable '%s' of type '%s' with value of type '%s'.",
-                 nodeLexeme(nameNode), dBuf, iBuf);
+    if (initExpr == NULL) {
+        if (!isErrorType(declType) && !(declType.arrayDepth > 0 && declType.fixedSize > 0)) {
+            char dBuf[64];
+            formatSemType(declType, dBuf, sizeof(dBuf));
+            semError(sa, nameNode ? nameNode : node,
+                     "Variable '%s' of type '%s' requires an initializer. Only fixed-size arrays (e.g., '[int, 10]') may be declared empty.",
+                     nodeLexeme(nameNode), dBuf);
+        }
+    } else {
+        SemType initType = analyzeExpression(sa, initExpr);
+        if (!isAssignable(declType, initType)) {
+            char dBuf[64], iBuf[64];
+            formatSemType(declType, dBuf, sizeof(dBuf));
+            formatSemType(initType, iBuf, sizeof(iBuf));
+            semError(sa, initExpr,
+                     "Cannot initialize variable '%s' of type '%s' with value of type '%s'.",
+                     nodeLexeme(nameNode), dBuf, iBuf);
+        }
+
+        // Fixed-size array literal bounds check
+        if (!isErrorType(declType) && declType.arrayDepth > 0 && declType.fixedSize > 0 &&
+            isLabel(initExpr, "ArrayLiteral")) {
+            int elemCount = 0;
+            const ParseNode *argList = findChild(initExpr, "ArgList", 0);
+            if (argList != NULL) {
+                for (size_t i = 0; i < argList->childCount; i++) {
+                    if (!isPunctuationNode(argList->children[i])) elemCount++;
+                }
+            }
+            if (elemCount > declType.fixedSize) {
+                semError(sa, initExpr,
+                         "Array literal has %d element(s), exceeding fixed capacity %d of '%s'.",
+                         elemCount, declType.fixedSize, nodeLexeme(nameNode));
+            }
+        }
     }
 
     Symbol sym;
