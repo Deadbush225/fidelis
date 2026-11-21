@@ -143,6 +143,34 @@ static bool expectTokenLogged(Parser *parser, const char *expected, const char *
 #define LEFT_ASSOC(operandFn, label, ...) \
     parseLeftAssoc(parser, (operandFn), TOKEN_LIST(__VA_ARGS__), TOKEN_COUNT(__VA_ARGS__), (label))
 
+static bool expectSemicolon(Parser *parser, const char *errMsg, const char *ctx) {
+    if (matchToken(parser, "SEMICOLON")) {
+        return true;
+    }
+
+    bool afterLineEnd = !parser->hasMoreTokens ||
+                        checkToken(parser, "EOF") ||
+                        checkToken(parser, "RBRACE") ||
+                        (parser->hasPrevToken &&
+                         parser->currentToken.sourceLine > parser->prevToken.sourceLine);
+
+    if (afterLineEnd && parser->hasPrevToken) {
+        reportErrorAfterPrev(parser, errMsg);
+        // Virtual semicolon: build still fails (encounteredError = true),
+        // but we don't swallow the next line via panicRecovery.
+        return true;
+    }
+
+    // Same-line error (e.g., stray tokens before ';'): report at current token & recover
+    reportError(parser, errMsg);
+    const char *sync[] = {"SEMICOLON", "RBRACE", "EOF"};
+    panicRecovery(parser, sync, 3, ctx);
+    return false;
+}
+
+#define EXPECT_SEMI(msg, ctx) \
+    do { if (!expectSemicolon(parser, (msg), (ctx))) FAIL(); } while (0)
+
 // ============================================================================
 //                     RECURSIVE DESCENT PARSING FUNCTIONS
 // ============================================================================
@@ -202,8 +230,7 @@ bool parseStatement(Parser *parser) {
     }
 
     REQUIRE(parseSimpleStatement(parser));
-    EXPECT_SYNC("SEMICOLON", "Expected ';' after statement.",
-                "statement termination", "SEMICOLON", "RBRACE", "EOF");
+    EXPECT_SEMI("Expected ';' after statement.", "statement termination");
     PASS();
 }
 
@@ -328,8 +355,7 @@ bool parseDeclOrEnsureStmt(Parser *parser) {
 
     REQUIRE(parseExpression(parser));
     parser->currentNode = _prevNode;
-    EXPECT_SYNC("SEMICOLON", "Expected ';' after variable declaration.",
-                "declaration termination", "SEMICOLON", "RBRACE", "EOF");
+    EXPECT_SEMI("Expected ';' after statement.", "declaration termination");
     PASS();
 }
 
@@ -731,7 +757,7 @@ bool parseMatchStmt(Parser *parser) {
             REQUIRE(parseBlock(parser));
         } else {
             REQUIRE(parseSimpleStatement(parser));
-            EXPECT("SEMICOLON", "Expected ';' after match case statement.");
+            EXPECT_SEMI("Expected ';' after match case statement.", "match case termination");
         }
     }
 

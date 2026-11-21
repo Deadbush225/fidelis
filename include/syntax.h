@@ -55,6 +55,8 @@ typedef struct {
     char sourceFilePath[256];   // Path to the original .fdls source file
     int symbolTableLine;        // Current line cursor in symbol_table.txt
     SymbolEntry currentToken;   // The token currently being examined
+    SymbolEntry prevToken;
+    bool hasPrevToken;
     bool hasMoreTokens;         // Whether there are more tokens to read
     bool encounteredError;      // Whether a syntax error has been encountered
     int errorCount;             // Total number of errors detected
@@ -72,6 +74,9 @@ ParseNode *wrapChildrenFrom(ParseNode *parent, size_t startIdx, const char *labe
 ParseNode *addChildNodeAt(ParseNode *parent, const char *label, int line, int column);
 void printParseTree(FILE *out, const ParseNode *root);
 void freeParseTree(ParseNode *node);
+
+void reportError(Parser *parser, const char *message);
+void reportErrorAfterPrev(Parser *parser, const char *message);
 
 // ============================================================================
 // PARSER API

@@ -1828,7 +1828,7 @@ static void cleanupAnalyzer(SemanticAnalyzer *sa) {
 bool analyzeSemantics(const char *sourceFilePath,
                       const ParseNode *root,
                       const char *outputPath) {
-    if (root == NULL || outputPath == NULL) {
+    if (root == NULL) {
         fprintf(stderr, "Error: Invalid input provided to semantic analyzer.\n");
         return false;
     }
@@ -1840,31 +1840,33 @@ bool analyzeSemantics(const char *sourceFilePath,
         strncpy(sa.sourceFilePath, sourceFilePath, sizeof(sa.sourceFilePath) - 1);
     }
 
-    sa.output = fopen(outputPath, "w");
-    if (sa.output == NULL) {
-        fprintf(stderr, "Error: Could not create semantic report file: %s\n", outputPath);
-        return false;
+    if (outputPath != NULL) {
+        sa.output = fopen(outputPath, "w");
+        if (sa.output == NULL) {
+            fprintf(stderr, "Error: Could not create semantic report file: %s\n", outputPath);
+            return false;
+        }
+        fprintf(sa.output, "================================================================================\n");
+        fprintf(sa.output, "  FIDELIS SEMANTIC ANALYZER — REPORT\n");
+        fprintf(sa.output, "  Source: %s\n", sa.sourceFilePath[0] ? sa.sourceFilePath : "(unknown)");
+        fprintf(sa.output, "================================================================================\n");
     }
-
-    fprintf(sa.output, "================================================================================\n");
-    fprintf(sa.output, "  FIDELIS SEMANTIC ANALYZER — REPORT\n");
-    fprintf(sa.output, "  Source: %s\n", sa.sourceFilePath[0] ? sa.sourceFilePath : "(unknown)");
-    fprintf(sa.output, "================================================================================\n");
 
     sa.globalScope = pushScope(&sa, "global");
     registerBuiltins(&sa);
 
-    // Pass 1: Hoist states and function signatures for forward references
     hoistTopLevelDecls(&sa, root);
 
-    // Pass 2: Full scoped traversal & type checking
     for (size_t i = 0; i < root->childCount; i++) {
         if (isLabel(root->children[i], "Statement")) {
             analyzeStatement(&sa, root->children[i]);
         }
     }
 
-    writeSymbolTableReport(&sa);
+    if (sa.output != NULL) {
+        writeSymbolTableReport(&sa);
+    }
+
     bool success = (sa.errorCount == 0);
     cleanupAnalyzer(&sa);
     return success;

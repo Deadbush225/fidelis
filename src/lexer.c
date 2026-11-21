@@ -165,7 +165,9 @@ typedef enum {
             token.lexeme[lexemeIdx] = '\0'; /* Null-terminate after each append */\
             if (lexerLoggingEnabled) { \
                 printf("Consumed %-2s to lexeme. Current lexeme is \e[0;35m%-40s\e[0m | Current state: \e[0;35m%s\e[0m\n", escapeCharacter((char)(ch)), escapedLexeme(token.lexeme), getStateName(state)); \
-                fprintf(transition, "Consumed %-2s to lexeme. Current lexeme is %-40s | Current state: %s \n", escapeCharacter((char)(ch)), escapedLexeme(token.lexeme) , getStateName(state)); \
+                if (transition != NULL) { \
+                    fprintf(transition, "Consumed %-2s to lexeme. Current lexeme is %-40s | Current state: %s \n", escapeCharacter((char)(ch)), escapedLexeme(token.lexeme) , getStateName(state)); \
+                } \
             } \
         } \
     } while (0)
@@ -183,10 +185,14 @@ typedef enum {
         if (lexerLoggingEnabled) { \
             if (strncmp(getTokenTypeName(token.type), "ERR_", 4) == 0) { \
                 printf("\e[0;31mRejected Lexeme:\e[0m %s | \e[0;31mtoken type:\e[0m %s\n", escapedLexeme(token.lexeme), getTokenTypeName(token.type)); \
-                fprintf(transition, "Rejected Lexeme: %s | token type: %s\n", token.lexeme, getTokenTypeName(token.type)); \
+                if (transition != NULL) { \
+                    fprintf(transition, "Rejected Lexeme: %s | token type: %s\n", token.lexeme, getTokenTypeName(token.type)); \
+                } \
             } else { \
                 printf("\e[0;32mAccepted Lexeme:\e[0m %s | \e[0;32mtoken type:\e[0m %s\n", escapedLexeme(token.lexeme), getTokenTypeName(token.type)); \
-                fprintf(transition, "Accepted Lexeme: %s | token type: %s\n", token.lexeme, getTokenTypeName(token.type)); \
+                if (transition != NULL) { \
+                    fprintf(transition, "Accepted Lexeme: %s | token type: %s\n", token.lexeme, getTokenTypeName(token.type)); \
+                } \
             } \
         } \
     } while (0)
@@ -453,7 +459,9 @@ Token getNextToken(FILE *source, FILE *transition) {
 
     if (lexerLoggingEnabled) {
         printf("=================================================== Scanning token... =================================================\n");
-        fprintf(transition, "=================================================== Scanning token... =================================================\n");
+        if (transition != NULL) {
+            fprintf(transition, "=================================================== Scanning token... =================================================\n");
+        }
     }
     
     while (state != STATE_DONE) {
@@ -489,7 +497,9 @@ Token getNextToken(FILE *source, FILE *transition) {
                 appendTransition(&token, STATE_START);
                 if (lexerLoggingEnabled) {
                     printf("Started scanning...    Current lexeme is \e[0;35m%-40s\e[0m | Current state: \e[0;35mSTATE_START\e[0m\n", "");
-                    fprintf(transition, "Started scanning...    Current lexeme is %-40s | Current state: STATE_START\n", "");
+                    if (transition != NULL) {
+                        fprintf(transition, "Started scanning...    Current lexeme is %-40s | Current state: STATE_START\n", "");
+                    }
                 }
 
                 if (isspace(c)) {
@@ -1294,7 +1304,9 @@ Token getNextToken(FILE *source, FILE *transition) {
 
     if (lexerLoggingEnabled) {
         printf("=======================================================================================================================\n");
-        fprintf(transition, "=======================================================================================================================\n");
+        if (transition != NULL) {
+            fprintf(transition, "=======================================================================================================================\n");
+        }
     }
     return token;
 }

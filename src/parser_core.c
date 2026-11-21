@@ -364,7 +364,7 @@ Returns:
     bool - true if initialization succeeded.
 */
 bool initParser(Parser *parser, const char *sourceFilePath, const char *symTablePath, const char *outputPath) {
-    if (parser == NULL || symTablePath == NULL || outputPath == NULL) {
+    if (parser == NULL || symTablePath == NULL) {
         return false;
     }
 
@@ -381,12 +381,16 @@ bool initParser(Parser *parser, const char *sourceFilePath, const char *symTable
         return false;
     }
 
-    parser->output = fopen(outputPath, "w");
-    if (parser->output == NULL) {
-        fprintf(stderr, "Error: Could not create output file: %s\n", outputPath);
-        fclose(parser->symbolTable);
-        parser->symbolTable = NULL;
-        return false;
+    if (outputPath != NULL) {
+        parser->output = fopen(outputPath, "w");
+        if (parser->output == NULL) {
+            fprintf(stderr, "Error: Could not create output file: %s\n", outputPath);
+            fclose(parser->symbolTable);
+            parser->symbolTable = NULL;
+            return false;
+        }
+    } else {
+        parser->output = NULL;
     }
 
     parser->hasMoreTokens = true;
@@ -413,6 +417,9 @@ Parameters:
 */
 void advanceToken(Parser *parser) {
     if (parser == NULL || !parser->hasMoreTokens) return;
+
+    parser->prevToken = parser->currentToken;
+    parser->hasPrevToken = true;
 
     if (!parser->suppressTree && parser->currentNode != NULL &&
         !isTreeIgnoredToken(parser->currentToken.type)) {
@@ -597,17 +604,26 @@ Parameters:
     Parser *parser      - Pointer to the parser state.
     const char *message - Error description and fix suggestion.
 */
-static void printErrorBox(FILE *dest, Parser *parser, const char *message, bool useColor) {
-    const char *type   = parser->hasMoreTokens ? parser->currentToken.type   : "EOF";
-    const char *lexeme = parser->hasMoreTokens ? parser->currentToken.lexeme : "(end of file)";
-    const char *file   = parser->sourceFilePath[0] ? parser->sourceFilePath  : "(source)";
+static int prevTokenSourceLen(const char *lexeme) {
+    if (lexeme == NULL || lexeme[0] == '\0') return 1;
+    int len = 0;
+    for (size_t i = 0; lexeme[i] != '\0'; i++) {
+        // Undo symbol_table.txt's backslash doubling so string/char literals don't overshoot
+        if (lexeme[i] == '\\' && lexeme[i + 1] == '\\') i++;
+        len++;
+    }
+    return len > 0 ? len : 1;
+}
+
+static void printErrorBoxAt(FILE *dest, Parser *parser, const char *message,
+                            int srcLine, int srcCol, int symLine,
+                            const char *type, const char *lexeme,
+                            const char *underlineLexeme, bool useColor) {
+    const char *file   = parser->sourceFilePath[0] ? parser->sourceFilePath : "(source)";
     const char *indent = useColor ? "" : "  ";
     const char *red    = useColor ? "\e[1;31m" : "";
     const char *yellow = useColor ? "\e[1;33m" : "";
     const char *reset  = useColor ? "\e[0m"    : "";
-    int srcLine = parser->currentToken.sourceLine;
-    int srcCol  = parser->currentToken.sourceColumn;
-    int symLine = parser->currentToken.symbolTableLine;
 
     fprintf(dest, "\n%s|==============================================================|\n", indent);
     fprintf(dest, "%s|  %sSYNTAX ERROR%s                                                |\n", indent, red, reset);
@@ -617,7 +633,7 @@ static void printErrorBox(FILE *dest, Parser *parser, const char *message, bool 
     fprintf(dest, "%s|  %sToken:%s     %s (\"%s\")\n", indent, yellow, reset, type, lexeme);
     fprintf(dest, "%s|  %sProblem:%s   %s\n", indent, yellow, reset, message);
     fprintf(dest, "%s|\n", indent);
-    printSourceSnippet(dest, parser->sourceFilePath, srcLine, srcCol, lexeme, useColor);
+    printSourceSnippet(dest, parser->sourceFilePath, srcLine, srcCol, underlineLexeme, useColor);
     fprintf(dest, "%s|==============================================================|\n\n", indent);
 }
 
@@ -625,8 +641,40 @@ void reportError(Parser *parser, const char *message) {
     if (parser == NULL) return;
     parser->encounteredError = true;
     parser->errorCount++;
-    printErrorBox(stderr, parser, message, true);
-    printErrorBox(parser->output, parser, message, false);
+
+    const char *type   = parser->hasMoreTokens ? parser->currentToken.type   : "EOF";
+    const char *lexeme = parser->hasMoreTokens ? parser->currentToken.lexeme : "(end of file)";
+    int srcLine = parser->currentToken.sourceLine;
+    int srcCol  = parser->currentToken.sourceColumn;
+    int symLine = parser->currentToken.symbolTableLine;
+
+    printErrorBoxAt(stderr, parser, message, srcLine, srcCol, symLine, type, lexeme, lexeme, true);
+    if (parser->output != NULL) {
+        printErrorBoxAt(parser->output, parser, message, srcLine, srcCol, symLine, type, lexeme, lexeme, false);
+    }
+}
+
+void reportErrorAfterPrev(Parser *parser, const char *message) {
+    if (parser == NULL) return;
+    if (!parser->hasPrevToken) {
+        reportError(parser, message);
+        return;
+    }
+
+    parser->encounteredError = true;
+    parser->errorCount++;
+
+    const char *type   = parser->hasMoreTokens ? parser->currentToken.type   : "EOF";
+    const char *lexeme = parser->hasMoreTokens ? parser->currentToken.lexeme : "(end of file)";
+    int srcLine = parser->prevToken.sourceLine;
+    int srcCol  = parser->prevToken.sourceColumn + prevTokenSourceLen(parser->prevToken.lexeme);
+    int symLine = parser->prevToken.symbolTableLine;
+
+    // Underline length of 1 (";") places a single '^' right after the previous token
+    printErrorBoxAt(stderr, parser, message, srcLine, srcCol, symLine, type, lexeme, ";", true);
+    if (parser->output != NULL) {
+        printErrorBoxAt(parser->output, parser, message, srcLine, srcCol, symLine, type, lexeme, ";", false);
+    }
 }
 
 /*
@@ -761,7 +809,7 @@ bool parseSourceFile(const char *sourceFilePath,
                      ParseNode **outRoot,
                      bool nonInteractive) {
     if (outRoot != NULL) *outRoot = NULL;
-    if (symbolTablePath == NULL || outputPath == NULL) {
+    if (symbolTablePath == NULL) {
         fprintf(stderr, "Error: Invalid file paths provided to parser.\n");
         return false;
     }
@@ -778,7 +826,9 @@ bool parseSourceFile(const char *sourceFilePath,
     }
 
     bool success = parseProgram(&parser);
-    printParseTree(parser.output, parser.root);
+    if (parser.output != NULL) {
+        printParseTree(parser.output, parser.root);
+    }
 
     if (outRoot != NULL) {
         *outRoot = parser.root;
