@@ -322,6 +322,7 @@ bool parseDeclOrEnsureStmt(Parser *parser) {
     }
 
     REQUIRE(parseExpression(parser));
+    parser->currentNode = _prevNode;
     EXPECT_SYNC("SEMICOLON", "Expected ';' after variable declaration.",
                 "declaration termination", "SEMICOLON", "RBRACE", "EOF");
     PASS();
@@ -725,6 +726,8 @@ bool parseMatchStmt(Parser *parser) {
             EXPECT("SEMICOLON", "Expected ';' after match case statement.");
         }
     }
+
+    parser->currentNode = matchNode;
 
     if (caseCount == 0) {
         reportError(parser, "Match statement must have at least one case. "
