@@ -217,9 +217,10 @@ static bool readNextEntry(Parser *parser, SymbolEntry *entry) {
 
         if (typeField[0] == '\0') continue;
 
-        // Skip comments before stitching continuation rows
+        // Skip comments and noise words before feeding tokens to the parser
         if (strcmp(typeField, "LINE_COMMENT") == 0 ||
-            strcmp(typeField, "BLOCK_COMMENT") == 0) {
+            strcmp(typeField, "BLOCK_COMMENT") == 0 ||
+            strcmp(typeField, "NOISE_WORD") == 0) {
             continue;
         }
 

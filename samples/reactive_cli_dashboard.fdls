@@ -20,15 +20,15 @@ string? lastCommand = null;
 [int, 3] nodeLoads = [35, 45, 55];
 
 react (cpuUsage) {
-    printLine("[CLI UI] CPU usage changed to " + cpuUsage + "%");
+    print("[CLI UI] CPU usage changed to " + cpuUsage + "%");
 }
 
 react (activeWorkers) {
-    printLine("[CLI UI] Active workers scaled to " + activeWorkers);
+    print("[CLI UI] Active workers scaled to " + activeWorkers);
 }
 
 react (serverOnline) {
-    printLine("[CLI UI] Server online state updated.");
+    print("[CLI UI] Server online state updated.");
 }
 
 fn calculateLoadPerWorker(int totalLoad, int workers) : int {
@@ -55,41 +55,44 @@ fn healthLabel(int usage) : string {
     }
 }
 
-printLine("Starting Fidelis Reactive CLI...");
+print("Starting Fidelis Reactive CLI...");
 sleep(1);
 
-loop (serverOnline && !maintenanceMode) do {
+loop do {
+    if (!serverOnline || maintenanceMode) {
+        quit;
+    }
     print("Admin Code: ");
     int? enteredCode = readInt();
 
     int code = ensure enteredCode else {
-        printLine("Admin code must be a valid integer.");
+        print("Admin code must be a valid integer.");
         quit;
     }
 
     if (code != adminCode || !serverOnline) do {
-        printLine("Authentication failed.");
+        print("Authentication failed.");
         quit;
     }
 
     string modeBadge = (activeWorkers > 0) ? "LIVE" : "STANDBY";
-    string statusText = cpuUsage |> healthLabel;
+    string statusText = cpuUsage |> healthLabel();
     float throughput = calculateThroughput(requestCount, uptimeHours);
 
-    printLine("--- SERVER DASHBOARD (" + modeBadge + ") ---");
+    print("--- SERVER DASHBOARD (" + modeBadge + ") ---");
     print("Tier ");
-    printLine(tierCode);
-    printLine("Status: " + statusText + " | Throughput: " + throughput);
+    print(tierCode);
+    print("Status: " + statusText + " | Throughput: " + throughput);
 
-    for (int i = 0 to i < 3; i += 1) do {
-        printLine("Node " + i + " Load: " + nodeLoads[i] + "%");
+    for (int i = 0; i < 3; i += 1) do {
+        print("Node " + i + " Load: " + nodeLoads[i] + "%");
     }
 
     print("CLI Command (scale / deploy / shutdown): ");
     string? rawInput = readLine();
 
     string command = ensure rawInput else {
-        printLine("Command cannot be empty.");
+        print("Command cannot be empty.");
         quit;
     }
 
@@ -100,12 +103,12 @@ loop (serverOnline && !maintenanceMode) do {
         int? rawWorkers = readInt();
 
         int workers = ensure rawWorkers else {
-            printLine("Worker count must be an integer.");
+            print("Worker count must be an integer.");
             quit;
         }
 
         if (workers < 1 || workers > MAX_WORKERS) {
-            printLine("Worker count out of allowed range.");
+            print("Worker count out of allowed range.");
         } else {
             activeWorkers = workers;
             cpuUsage = calculateLoadPerWorker(cpuUsage, activeWorkers);
@@ -118,10 +121,10 @@ loop (serverOnline && !maintenanceMode) do {
         cpuUsage += 15;
         cpuUsage -= 5;
         uptimeHours += 1.0;
-        printLine("Deployment complete.");
+        print("Deployment complete.");
     } else if (command == "shutdown") {
         serverOnline = false;
-        printLine("Server CLI stopped.");
+        print("Server CLI stopped.");
         quit;
     }
 }
