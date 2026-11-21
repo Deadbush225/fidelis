@@ -4,6 +4,7 @@
 #include "helper.h"
 #include "syntax.h"
 #include "semantic.h"
+#include "interpreter.h"
 
 #ifdef _WIN32
     #include <direct.h> // Windows specific header for mkdir
@@ -99,7 +100,7 @@ int main(int argc, char *argv[]) {
         printf("  Semantic report written to: %s\n", semanticOutputPath);
     }
 
-    freeParseTree(parseTree);
+    // freeParseTree(parseTree);
 
     /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
      *  SUMMARY
@@ -120,6 +121,26 @@ int main(int argc, char *argv[]) {
     // printf("===============================================================\n");
 
     // return (lexResult != 0 || parseResult != 0) ? 1 : 0;
+    // Phase 4: Execution (Interpreter)
+    int execResult = 1;
+    if (parseResult == 0 && semanticResult == 0 && parseTree != NULL) {
+        printf("\n===============================================================\n");
+        printf("  PHASE 4: EXECUTION\n");
+        printf("===============================================================\n\n");
+
+        bool execOk = executeProgram(inputFileName, parseTree);
+        execResult = execOk ? 0 : 1;
+
+        printf("\n===============================================================\n");
+        if (execOk) {
+            printf("  \e[1;32m[OK] Program exited cleanly.\e[0m\n");
+        } else {
+            printf("  \e[1;31m[ERR] Program terminated with a runtime error.\e[0m\n");
+        }
+        printf("===============================================================\n");
+    }
+
+    freeParseTree(parseTree);
 }
 
 // ============================================================================

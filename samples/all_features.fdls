@@ -1,15 +1,19 @@
 /* ==========================================
  THE TERMINAL FSM: SMART HOME DASHBOARD
+ Full Input/Output & Language Feature Test
  ========================================== */
 
-// 1. GLOBAL STATE
+// 1. GLOBAL STATE (all primitive types, arrays, and optional 'is' noise word)
 bool lightsOn = false;
 int roomTemp = 22;
+float powerDrawKw = 1.25;
+char securityGrade = 'A';
 int masterPin = 1234;
-[string] accessLogs = ["System Booted", "Thermostat Initialized"];
+string osBanner is = "FIDELIS SMART HOME OS v1.0";
+[string] accessLogs = ["System Booted", "Thermostat Initialized", "Idle"];
 
-// 2. DATA-DRIVEN WATCHERS (react)
-react (lightsOn) {
+// 2. DATA-DRIVEN WATCHERS (react with scalar & array mutations)
+react (lightsOn) do {
     string status = (lightsOn == true) ? "illuminated" : "extinguished";
     print("[SYSTEM EVENT] Living room lights " + status + ".");
 }
@@ -18,7 +22,11 @@ react (roomTemp) {
     print("[SYSTEM EVENT] Thermostat calibrated to " + roomTemp + "C.");
 }
 
-// 3. CUSTOM FUNCTIONS (fn)
+react (accessLogs) {
+    print("[SYSTEM EVENT] Access logs updated -> " + accessLogs);
+}
+
+// 3. CUSTOM FUNCTIONS (single-param, multi-param, float math, recursion)
 fn formatStatus(bool status) : string {
     return (status == true) ? "ACTIVE" : "INACTIVE";
 }
@@ -27,21 +35,39 @@ fn removeSpaces(string text) : string {
     return replace(text, " ", "");
 }
 
+fn addTag(string text, string tag) : string {
+    return "[" + tag + "] " + text;
+}
+
+fn estimateDailyCost(float kw, int hours, float ratePerKwh) : float {
+    return kw * hours * ratePerKwh;
+}
+
+fn factorial(int n) : int {
+    if (n <= 1) {
+        return 1;
+    } else {
+        return n * factorial(n - 1);
+    }
+}
+
 // 4. ISOLATED STATES (state & transition)
 state Boot {
-    print("--- SYSTEM LOCKED ---");
+    print("\n--- SYSTEM LOCKED ---");
+    print("Hint: Master PIN is " + masterPin + " (try typing 'abc' to test ensure)");
     print("Enter 4-digit numeric PIN:");
-    
+
     int? input = readInt();
-    
-    // ensure explicitly declaring the type of the new variable
-    int pin = ensure input else {
+
+    // ensure explicitly declaring the type of the unwrapped variable
+    int pin is = ensure input else {
         print("[ERROR] PIN must contain only numbers.");
         transition to Boot;
     }
-    
+
     if (pin == masterPin) {
         print("Access granted.");
+        accessLogs[2] = "User Authenticated";
         transition to Dashboard;
     } else {
         print("Incorrect PIN.");
@@ -55,42 +81,48 @@ state Dashboard {
     print("2: Set Temperature");
     print("3: View System Status");
     print("4: Lock System");
-    
-    loop {
-        print("\nSelect an action (1-4):");
-        
-        // Pipeline used purely for string manipulation
+    print("5: Run Full I/O & Feature Showcase");
+    print("6: Shutdown System");
+
+    loop do {
+        print("\nSelect an action (1-6):");
+
+        // Pipeline used for string manipulation
         string choice = readLine() |> removeSpaces();
-        
-        match choice {
+
+        match choice do {
             "1" -> transition to LightControl;
             "2" -> transition to TempControl;
             "3" -> transition to StatusView;
             "4" -> transition to Boot;
-            ""  -> print("");
-            _   -> print("Unknown command.");
+            "5" -> transition to LanguageFeatureShowcase;
+            "6" -> transition to Shutdown;
+            ""  -> print("(empty input ignored)");
+            _   -> print("Unknown command: \"" + choice + "\"");
         }
     }
 }
 
 state LightControl {
     lightsOn = (lightsOn == true) ? false : true;
+    powerDrawKw = (lightsOn == true) ? powerDrawKw + 0.35 : powerDrawKw - 0.35;
+    print("Updated power draw: " + powerDrawKw + " kW");
     transition to Dashboard;
 }
 
 state TempControl {
     print("\nCurrent temperature is " + roomTemp + "C.");
-    
+
     loop {
-        print("Enter new target temperature (-99 to cancel):");
-        
+        print("Enter new target temperature (16-30, or -99 to cancel):");
+
         int? newTemp = readInt();
-        
+
         int validTemp = ensure newTemp else {
             print("[ERROR] Temperature must be a number.");
             transition to TempControl;
         }
-        
+
         if (validTemp == -99) {
             transition to Dashboard;
         } else if (validTemp < 16) {
@@ -106,75 +138,153 @@ state TempControl {
 
 state StatusView {
     print("\n--- SYSTEM STATUS ---");
-    
+
     string lightDisplay = lightsOn |> formatStatus();
-    print("Lights: " + lightDisplay);
-    print("Thermostat: " + roomTemp + "C");
-    
-    print("\n--- RECENT LOGS ---");
+    float dailyCost = estimateDailyCost(powerDrawKw, 24, 11.5);
+
+    print("Lights:\t\t" + lightDisplay);
+    print("Thermostat:\t" + roomTemp + "C");
+    print("Power Draw:\t" + powerDrawKw + " kW");
+    print("Est. 24h Cost:\t" + dailyCost);
+    print("Security Grade:\t" + securityGrade);
+
+    print("\n--- RECENT LOGS (count=" + accessLogs.length + ") ---");
     for (int i = 0; i < length(accessLogs); i += 1) {
         print("- Log " + i + ": " + accessLogs[i]);
     }
-    
+    print("Raw array output:");
+    print(accessLogs);
+
     print("\nPress Enter to return to Dashboard.");
     string wait = readLine();
-    
+
     transition to Dashboard;
 }
 
-// 5. ADDITIONAL LANGUAGE FEATURES FROM Fidelis.md
+// 5. INTERACTIVE I/O & FULL LANGUAGE FEATURE SHOWCASE
 state LanguageFeatureShowcase {
-    // Arrays, indexing, assignment, and both length forms described in the spec.
+    print("\n=== LANGUAGE FEATURE & I/O SHOWCASE ===");
+
+    // A. Arrays, indexing, mutation, compound index update, and both length forms
     [int] scores = [90, 85, 88];
     int scoreCount = length(scores);
     int scoreCountByProperty = scores.length;
+    print("Initial scores array:");
+    print(scores);
     scores[1] = 95;
+    scores[2] += 2;
+    print("After scores[1]=95 and scores[2]+=2:");
+    print(scores);
+    print("length(scores)=" + scoreCount + ", scores.length=" + scoreCountByProperty);
 
-
-    // Optional primitive and array types, null, and ensure-based unwrapping.
+    // B. Nullable primitives, nullable array, null literal printing & null checks
     int? optionalScore = null;
     float? optionalWeight = null;
     bool? optionalFlag = null;
     char? optionalInitial = null;
-    string? optionalName = readLine();
     [int]? optionalScores = null;
+
+    print("\n--- NULLABLE & RAW VALUE OUTPUTS ---");
+    print(optionalScore);
+    print(null);
+    print(true);
+    print(false);
+    print(3.14159);
+    print('Z');
+    bool isMissing = (optionalScore == null);
+    bool hasWeight = (optionalWeight != null);
+    print("optionalScore == null -> " + isMissing + ", optionalWeight != null -> " + hasWeight);
+
+    // C. String input + multi-stage pipeline with extra arguments + ensure
+    print("\nEnter your name (try 'Ada' or include extra spaces):");
+    string? optionalName = readLine();
 
     string confirmedName = ensure optionalName else {
         print("No name was entered.");
         transition to Dashboard;
     }
 
-    // Character and string escapes are retained in the lexeme.
-    char newline = '\n';
-    string quotedText = "She said: \"hello\"";
+    string taggedName = confirmedName |> removeSpaces() |> addTag("USER");
+    print("Multi-stage pipeline output: " + taggedName);
 
-    // Arithmetic, relational, logical, and compound assignment operators.
+    // D. Escape sequences in char & string literals
+    char newline = '\n';
+    char tabChar = '\t';
+    string quotedText = "She said: \"hello\"" + newline + tabChar + "Path: C:\\fidelis\\demo";
+    print(quotedText);
+
+    // E. Arithmetic precedence, unary minus, exponent, integer division, modulo, compound ops
     int calculation = -(2 ^ 3) + 10 / 2 \ 2 % 3;
+    print("\nPrecedence test: -(2 ^ 3) + 10 / 2 \\ 2 % 3 = " + calculation);
     calculation += 1;
     calculation -= 1;
     calculation *= 2;
     calculation /= 2;
     calculation %= 5;
+    print("After +=1, -=1, *=2, /=2, %=5 -> " + calculation);
 
+    string summary = "Summary";
+    summary += " [grade=" + securityGrade + "]";
+    print("String += result: " + summary);
+
+    // F. Relational (including char), logical, and single-statement if
     bool withinRange = scoreCount >= 1 && scoreCountByProperty <= 10;
     bool differs = calculation != 0 || !withinRange;
+    bool charOrder = 'A' < 'Z';
+    print("withinRange=" + withinRange + ", differs=" + differs + ", 'A' < 'Z'=" + charOrder);
+    if (charOrder) print("Single-statement if branch executed.");
 
-    // Nested iteration and a multi-statement match case.
-    for (int x = 1; x <= 2; x += 1) {
+    // G. Interactive numeric input -> recursion + signed match expression
+    print("\nEnter an integer between -1 and 6 (or type text to test ensure fallback):");
+    int? rawNum = readInt();
+
+    int n = ensure rawNum else {
+        print("[ENSURE TRIGGERED] Non-numeric input caught! Returning to Dashboard.");
+        transition to Dashboard;
+    }
+
+    if (n >= 0 && n <= 12) {
+        print("factorial(" + n + ") = " + factorial(n));
+    }
+
+    match (n) {
+        -1 -> print("Matched negative pattern: -1");
+        0  -> print("Matched zero pattern: 0");
+        1  -> print("Matched positive pattern: 1");
+        _  -> print("Matched wildcard for value: " + n);
+    }
+
+    // H. Nested for loops
+    print("\nNested loop coordinates:");
+    for (int x = 1; x <= 2; x += 1) do {
         for (int y = 1; y <= 2; y += 1) {
             print("Coordinate: (" + x + ", " + y + ")");
         }
     }
 
+    // I. Multi-statement match case with block
     match confirmedName {
         "Ada" -> {
-            print("Welcome, Ada.");
+            print("Welcome, Ada! Returning to Dashboard.");
             transition to Dashboard;
         }
-        _ -> print("Welcome, " + confirmedName);
+        _ -> print("Welcome, " + confirmedName + "!");
     }
+
+    print("\nShowcase complete. Press Enter to return to Dashboard.");
+    string done = readLine();
+    transition to Dashboard;
 }
 
-// System commands documented in Fidelis.md.
+state Shutdown {
+    print("\nShutting down " + osBanner + "...");
+    sleep(150);
+    print("Goodbye!");
+    quit;
+}
+
+// 6. TOP-LEVEL STARTUP EXECUTION (runs before entering state Boot)
+print("========================================");
+print("  " + osBanner);
+print("========================================");
 sleep(100);
-quit;
