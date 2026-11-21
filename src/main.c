@@ -89,9 +89,9 @@ int main(int argc, char *argv[]) {
     printf("  Transition log: %s\n", transitionTracePath);
 
     // if (lexResult == 0 && parseResult == 0) {
-    //     printf("\n  \e[1;32m✓ BUILD SUCCESSFUL — No lexical or syntax errors.\e[0m\n");
+    //     printf("\n  \e[1;32m[OK] BUILD SUCCESSFUL — No lexical or syntax errors.\e[0m\n");
     // } else {
-    //     printf("\n  \e[1;31m✗ BUILD COMPLETED WITH ERRORS.\e[0m\n");
+    //     printf("\n  \e[1;31m[ERR] BUILD COMPLETED WITH ERRORS.\e[0m\n");
     // }
     // printf("===============================================================\n");
 
@@ -180,9 +180,9 @@ static int runParser(const char *inputFileName, const char *symbolTableFilePath,
     bool success = parseSourceFile(inputFileName, symbolTableFilePath, parseOutputPath);
 
     if (success) {
-        printf("  \e[1;32m✓ Syntax analysis complete — No syntax errors.\e[0m\n");
+        printf("  \e[1;32m[OK] Syntax analysis complete - No syntax errors.\e[0m\n");
     } else {
-        printf("  \e[1;31m✗ Syntax analysis complete — Errors detected.\e[0m\n");
+        printf("  \e[1;31m[ERR] Syntax analysis complete - Errors detected.\e[0m\n");
     }
     printf("  Parse trace written to: %s\n", parseOutputPath);
 

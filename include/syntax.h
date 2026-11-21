@@ -172,10 +172,11 @@ bool parseVarDecl(Parser *parser);
 bool parseAssignment(Parser *parser);
 bool parsePrintStmt(Parser *parser);
 bool parseIfStmt(Parser *parser);
+bool parseSleepStmt(Parser *parser);
+bool parseIdentStmt(Parser *parser);
 bool parseLoopStmt(Parser *parser);
 bool parseForStmt(Parser *parser);
 bool parseMatchStmt(Parser *parser);
-bool parseEnsureStmt(Parser *parser);
 bool parseTransitionStmt(Parser *parser);
 bool parseReturnStmt(Parser *parser);
 bool parseBlock(Parser *parser);
@@ -196,6 +197,8 @@ bool parseArgList(Parser *parser);
 bool parseFnDecl(Parser *parser);
 bool parseReactDecl(Parser *parser);
 bool parseStateDecl(Parser *parser);
+bool parsePipelineExpr(Parser *parser);
+bool parseDeclOrEnsureStmt(Parser *parser);
 
 // ============================================================================
 // ERROR RECOVERY
