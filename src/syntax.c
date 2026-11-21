@@ -808,9 +808,7 @@ bool parseReturnStmt(Parser *parser) {
     NODE("ReturnStmt");
 
     EXPECT("RETURN", "Expected 'return' keyword. Syntax: return expression;");
-    if (!CHECK_ANY("SEMICOLON", "RBRACE", "EOF")) {
-        REQUIRE(parseExpression(parser));
-    }
+    REQUIRE(parseExpression(parser));
 
     PASS();
 }
