@@ -183,10 +183,7 @@ static bool readNextEntry(Parser *parser, SymbolEntry *entry) {
     while (fgets(line, sizeof(line), parser->symbolTable) != NULL) {
         parser->symbolTableLine++;
 
-        // Skip empty lines
-        if (line[0] == '\n' || line[0] == '\r' || line[0] == '\0') {
-            continue;
-        }
+        if (line[0] == '\n' || line[0] == '\r' || line[0] == '\0') continue;
 
         // Format: LINE | COL | TOKEN TYPE | LEXEME | STATE TRANSITIONS
         char *p1 = strchr(line, '|');
@@ -196,7 +193,6 @@ static bool readNextEntry(Parser *parser, SymbolEntry *entry) {
         char *p3 = strchr(p2 + 1, '|');
         if (p3 == NULL) continue;
 
-        // Extract LINE, COL, and TOKEN TYPE
         char lineField[32] = {0};
         char colField[32] = {0};
         char typeField[64] = {0};
@@ -206,10 +202,8 @@ static bool readNextEntry(Parser *parser, SymbolEntry *entry) {
         strncpy(lineField, line, lineLen);
         trimWhitespace(lineField);
 
-        // Skip header ("LINE"), divider ("==="), and wrapped continuation rows ("")
-        if (!isdigit((unsigned char)lineField[0])) {
-            continue;
-        }
+        // Skip header ("LINE"), divider ("==="), and stray continuation rows ("")
+        if (!isdigit((unsigned char)lineField[0])) continue;
 
         size_t colLen = (size_t)(p2 - (p1 + 1));
         if (colLen >= sizeof(colField)) colLen = sizeof(colField) - 1;
@@ -221,35 +215,34 @@ static bool readNextEntry(Parser *parser, SymbolEntry *entry) {
         strncpy(typeField, p2 + 1, typeLen);
         trimWhitespace(typeField);
 
-        // Wrapped continuation rows have an empty TOKEN TYPE column
-        if (typeField[0] == '\0') {
+        if (typeField[0] == '\0') continue;
+
+        // Skip comments before stitching continuation rows
+        if (strcmp(typeField, "LINE_COMMENT") == 0 ||
+            strcmp(typeField, "BLOCK_COMMENT") == 0) {
             continue;
         }
 
-        // Start of LEXEME column (skip the single space after '|')
+        // Extract raw LEXEME slice (keep column-boundary spaces until continuation check finishes)
         char *lexemeStart = p3 + 1;
         if (*lexemeStart == ' ') lexemeStart++;
 
-        // Find the separator before STATE TRANSITIONS safely (even if lexeme has '|')
         char *transSep = strstr(lexemeStart, " | STATE_");
-        char *p4 = NULL;
-        if (transSep != NULL) {
-            p4 = transSep + 1; // points to '|'
-        } else {
-            p4 = strrchr(lexemeStart, '|');
+        char *p4 = (transSep != NULL) ? (transSep + 1) : strrchr(lexemeStart, '|');
+
+        char *lexemeEnd = (p4 != NULL && p4 > lexemeStart)
+                              ? p4
+                              : (lexemeStart + strlen(lexemeStart));
+        if (p4 != NULL && lexemeEnd > lexemeStart && *(lexemeEnd - 1) == ' ') {
+            lexemeEnd--; // strip the single separator space before '|'
         }
 
-        char lexemeField[256] = {0};
-        if (p4 != NULL && p4 > lexemeStart) {
-            size_t lexLen = (size_t)(p4 - lexemeStart);
-            if (lexLen >= sizeof(lexemeField)) lexLen = sizeof(lexemeField) - 1;
-            strncpy(lexemeField, lexemeStart, lexLen);
-        } else {
-            strncpy(lexemeField, lexemeStart, sizeof(lexemeField) - 1);
-        }
-        trimWhitespace(lexemeField);
+        size_t lexLen = (size_t)(lexemeEnd - lexemeStart);
+        if (lexLen >= sizeof(entry->lexeme)) lexLen = sizeof(entry->lexeme) - 1;
+        memcpy(entry->lexeme, lexemeStart, lexLen);
+        entry->lexeme[lexLen] = '\0';
 
-        // Fill entry fields
+        // Fill non-lexeme fields
         entry->sourceLine = atoi(lineField);
         entry->sourceColumn = atoi(colField);
         entry->symbolTableLine = parser->symbolTableLine;
@@ -257,26 +250,93 @@ static bool readNextEntry(Parser *parser, SymbolEntry *entry) {
         strncpy(entry->type, typeField, sizeof(entry->type) - 1);
         entry->type[sizeof(entry->type) - 1] = '\0';
 
-        strncpy(entry->lexeme, lexemeField, sizeof(entry->lexeme) - 1);
-        entry->lexeme[sizeof(entry->lexeme) - 1] = '\0';
-
         if (p4 != NULL) {
             char *transStart = p4 + 1;
             while (*transStart == ' ') transStart++;
             strncpy(entry->transitions, transStart, sizeof(entry->transitions) - 1);
             entry->transitions[sizeof(entry->transitions) - 1] = '\0';
             size_t tlen = strlen(entry->transitions);
-            while (tlen > 0 && (entry->transitions[tlen - 1] == '\n' || entry->transitions[tlen - 1] == '\r')) {
+            while (tlen > 0 && (entry->transitions[tlen - 1] == '\n' ||
+                                entry->transitions[tlen - 1] == '\r')) {
                 entry->transitions[--tlen] = '\0';
             }
         } else {
             entry->transitions[0] = '\0';
         }
 
-        // Comments are lexer output, not parser statements
-        if (strcmp(entry->type, "LINE_COMMENT") == 0 ||
-            strcmp(entry->type, "BLOCK_COMMENT") == 0) {
-            continue;
+        // Peek ahead and stitch any wrapped LEXEME continuation rows
+        for (;;) {
+            fpos_t savedPos;
+            if (fgetpos(parser->symbolTable, &savedPos) != 0) break;
+
+            char nextLine[1024];
+            if (fgets(nextLine, sizeof(nextLine), parser->symbolTable) == NULL) break;
+
+            char *np1 = strchr(nextLine, '|');
+            char *np2 = np1 ? strchr(np1 + 1, '|') : NULL;
+            char *np3 = np2 ? strchr(np2 + 1, '|') : NULL;
+            if (np1 == NULL || np2 == NULL || np3 == NULL) {
+                fsetpos(parser->symbolTable, &savedPos);
+                break;
+            }
+
+            char nLine[32] = {0};
+            char nType[64] = {0};
+
+            size_t nlLen = (size_t)(np1 - nextLine);
+            if (nlLen >= sizeof(nLine)) nlLen = sizeof(nLine) - 1;
+            strncpy(nLine, nextLine, nlLen);
+            trimWhitespace(nLine);
+
+            size_t ntLen = (size_t)(np3 - (np2 + 1));
+            if (ntLen >= sizeof(nType)) ntLen = sizeof(nType) - 1;
+            strncpy(nType, np2 + 1, ntLen);
+            trimWhitespace(nType);
+
+            // Not a continuation row -> rewind so the next readNextEntry() reads it
+            if (nLine[0] != '\0' || nType[0] != '\0') {
+                fsetpos(parser->symbolTable, &savedPos);
+                break;
+            }
+
+            parser->symbolTableLine++;
+
+            char *nLexStart = np3 + 1;
+            if (*nLexStart == ' ') nLexStart++;
+
+            char *nTransSep = strstr(nLexStart, " | STATE_");
+            char *np4 = (nTransSep != NULL) ? (nTransSep + 1) : strrchr(nLexStart, '|');
+            char *nLexEnd = (np4 != NULL && np4 > nLexStart)
+                                ? np4
+                                : (nLexStart + strlen(nLexStart));
+            if (np4 != NULL && nLexEnd > nLexStart && *(nLexEnd - 1) == ' ') {
+                nLexEnd--;
+            }
+
+            // Only append if the continuation row actually has wrapped lexeme text
+            // (rows that only wrap STATE TRANSITIONS leave this column blank)
+            size_t chunkLen = (size_t)(nLexEnd - nLexStart);
+            bool hasLexContent = false;
+            for (size_t i = 0; i < chunkLen; i++) {
+                if (!isspace((unsigned char)nLexStart[i])) {
+                    hasLexContent = true;
+                    break;
+                }
+            }
+
+            if (hasLexContent) {
+                size_t curLen = strlen(entry->lexeme);
+                size_t avail = sizeof(entry->lexeme) - 1 - curLen;
+                size_t copyLen = (chunkLen < avail) ? chunkLen : avail;
+                memcpy(entry->lexeme + curLen, nLexStart, copyLen);
+                entry->lexeme[curLen + copyLen] = '\0';
+            }
+        }
+
+        // Trim only trailing column-padding spaces from the final stitched lexeme
+        size_t finalLen = strlen(entry->lexeme);
+        while (finalLen > 0 && isspace((unsigned char)entry->lexeme[finalLen - 1])) {
+            entry->lexeme[--finalLen] = '\0';
         }
 
         return true;
