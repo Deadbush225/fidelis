@@ -18,12 +18,12 @@
 static int runLexer(const char *inputFileName, const char *symbolTableFilePath, const char *transitionTraceOutputPath);
 static int runParser(const char *inputFileName, const char *symbolTableFilePath, const char *parseOutputPath);
 // ============================================================================
-// MAIN — Entry point
+// MAIN - Entry point
 // ============================================================================
 // Usage: fidelis.exe <input.fdls>
 //
-// Phase 1: Lexical Analysis — produces symbol_table.txt
-// Phase 2: Syntax Analysis (Recursive Descent Parsing) — produces parse_tree.txt
+// Phase 1: Lexical Analysis - produces symbol_table.txt
+// Phase 2: Syntax Analysis (Recursive Descent Parsing) - produces parse_tree.txt
 // ============================================================================
 int main(int argc, char *argv[]) {
     printf("===================== FIDELIS COMPILER =====================\n");
@@ -89,7 +89,7 @@ int main(int argc, char *argv[]) {
     printf("  Transition log: %s\n", transitionTracePath);
 
     // if (lexResult == 0 && parseResult == 0) {
-    //     printf("\n  \e[1;32m[OK] BUILD SUCCESSFUL — No lexical or syntax errors.\e[0m\n");
+    //     printf("\n  \e[1;32m[OK] BUILD SUCCESSFUL - No lexical or syntax errors.\e[0m\n");
     // } else {
     //     printf("\n  \e[1;31m[ERR] BUILD COMPLETED WITH ERRORS.\e[0m\n");
     // }
@@ -99,7 +99,7 @@ int main(int argc, char *argv[]) {
 }
 
 // ============================================================================
-// runLexer — Phase 1: Tokenize the input .fdls file
+// runLexer - Phase 1: Tokenize the input .fdls file
 // ============================================================================
 static int runLexer(const char *inputFileName, const char *symbolTableFilePath, const char *transitionTraceOutputPath) {
     printf("Processing File: %s\n\n", inputFileName);
@@ -162,7 +162,7 @@ static int runLexer(const char *inputFileName, const char *symbolTableFilePath, 
         free(lexeme);
     } while (t.type != TOKEN_EOF);
 
-    printf("  Lexical analysis complete — %d tokens generated.\n", tokenCount);
+    printf("  Lexical analysis complete - %d tokens generated.\n", tokenCount);
     printf("  Output written to: %s\n", symbolTableFilePath);
 
     fclose(inputFileHandle);
@@ -172,7 +172,7 @@ static int runLexer(const char *inputFileName, const char *symbolTableFilePath, 
 }
 
 // ============================================================================
-// runParser — Phase 2: Recursive Descent Parsing of the symbol table
+// runParser - Phase 2: Recursive Descent Parsing of the symbol table
 // ============================================================================
 static int runParser(const char *inputFileName, const char *symbolTableFilePath, const char *parseOutputPath) {
     printf("Parsing symbol table: %s\n\n", symbolTableFilePath);

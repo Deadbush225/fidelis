@@ -12,6 +12,7 @@ gcc \
   "$ROOT_DIR/src/lexer.c" \
   "$ROOT_DIR/src/helper.c" \
   "$ROOT_DIR/src/syntax.c" \
+  "$ROOT_DIR/src/parser_core.c" \
   -o "$OUT"
 
 printf 'Build succeeded: %s\n' "$OUT"
