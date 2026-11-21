@@ -60,6 +60,7 @@ typedef struct {
     int errorCount;             // Total number of errors detected
     int recoveryAttempts;       // Number of panic recovery attempts
     char defaultRecoveryChoice; // Uppercase recovery choice to reuse ('C', 'S', or 'A')
+    bool nonInteractive;        // true in --check mode (never prompts stdin)
     ParseNode *root;
     ParseNode *currentNode;
     bool suppressTree;
@@ -135,7 +136,8 @@ Returns:
 bool parseSourceFile(const char *sourceFilePath,
                      const char *symbolTablePath,
                      const char *outputPath,
-                     ParseNode **outRoot);
+                     ParseNode **outRoot,
+                     bool nonInteractive);
 
 void printSourceSnippet(FILE *dest, const char *sourceFilePath,
                         int targetLine, int targetCol,

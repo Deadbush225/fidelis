@@ -650,6 +650,15 @@ void panicRecovery(Parser *parser, const char *syncTokens[], int syncCount, cons
 
     parser->recoveryAttempts++;
 
+    // Fast path for --check / IDE mode: never prompt stdin, silently sync with [C]
+    if (parser->nonInteractive) {
+        while (parser->hasMoreTokens && !checkTokenAny(parser, syncTokens, syncCount)) {
+            advanceToken(parser);
+        }
+        parser->suppressTree = false;
+        return;
+    }
+
     fprintf(stderr, "\n  \e[1;33m!! PANIC MODE ERROR RECOVERY\e[0m\n");
     fprintf(stderr, "  Context: %s\n", context);
     fprintf(stderr, "  Skipping tokens until a synchronization point is found...\n");
@@ -746,8 +755,11 @@ Parameters:
 Returns:
     bool - true if parsing completed successfully (no syntax errors).
 */
-bool parseSourceFile(const char *sourceFilePath, const char *symbolTablePath,
-                     const char *outputPath, ParseNode **outRoot) {
+bool parseSourceFile(const char *sourceFilePath,
+                     const char *symbolTablePath,
+                     const char *outputPath,
+                     ParseNode **outRoot,
+                     bool nonInteractive) {
     if (outRoot != NULL) *outRoot = NULL;
     if (symbolTablePath == NULL || outputPath == NULL) {
         fprintf(stderr, "Error: Invalid file paths provided to parser.\n");
@@ -760,12 +772,17 @@ bool parseSourceFile(const char *sourceFilePath, const char *symbolTablePath,
         return false;
     }
 
+    parser.nonInteractive = nonInteractive;
+    if (nonInteractive) {
+        parser.defaultRecoveryChoice = 'C';
+    }
+
     bool success = parseProgram(&parser);
     printParseTree(parser.output, parser.root);
 
     if (outRoot != NULL) {
         *outRoot = parser.root;
-        parser.root = NULL;         // caller now owns and frees the tree
+        parser.root = NULL;  // caller now owns and frees the tree
         parser.currentNode = NULL;
     }
 

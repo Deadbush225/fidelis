@@ -148,3 +148,40 @@ void printSymbolTableRow(FILE* out, int line, int column, const char* type, cons
         isFirstLine = 0;
     }
 }
+
+#ifdef _WIN32
+#include <process.h>
+#define GET_PID() _getpid()
+#define PATH_SEP  '\\'
+#else
+#include <unistd.h>
+#define GET_PID() getpid()
+#define PATH_SEP  '/'
+#endif
+
+void makeTempPath(char *buf, size_t bufSize, const char *suffix) {
+    const char *dir = getenv("TEMP");
+    if (dir == NULL || dir[0] == '\0') dir = getenv("TMP");
+    if (dir == NULL || dir[0] == '\0') dir = "/tmp";
+
+    size_t len = strlen(dir);
+    bool hasSep = (len > 0 && (dir[len - 1] == '/' || dir[len - 1] == '\\'));
+    if (hasSep) {
+        snprintf(buf, bufSize, "%sfidelis_%d_%s", dir, (int)GET_PID(), suffix);
+    } else {
+        snprintf(buf, bufSize, "%s%cfidelis_%d_%s", dir, PATH_SEP, (int)GET_PID(), suffix);
+    }
+}
+
+void printPhaseHeader(const char *title) {
+    printf("\n" CLR_CYAN "===============================================================" CLR_RESET "\n");
+    printf("  " CLR_BOLD "%s" CLR_RESET "\n", title);
+    printf(CLR_CYAN "===============================================================" CLR_RESET "\n\n");
+}
+
+// Formats a phase status code: 0 = PASS, -1 = SKIP, anything else = FAIL
+const char *phaseBadge(int code) {
+    if (code == 0)  return CLR_GREEN  "[PASS]" CLR_RESET;
+    if (code == -1) return CLR_YELLOW "[SKIP]" CLR_RESET;
+    return CLR_RED "[FAIL]" CLR_RESET;
+}
