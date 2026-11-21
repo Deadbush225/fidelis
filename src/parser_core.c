@@ -188,11 +188,6 @@ static bool readNextEntry(Parser *parser, SymbolEntry *entry) {
             continue;
         }
 
-        // Skip header and divider lines
-        if (strstr(line, "TOKEN TYPE") != NULL || strstr(line, "===") != NULL) {
-            continue;
-        }
-
         // Format: LINE | COL | TOKEN TYPE | LEXEME | STATE TRANSITIONS
         char *p1 = strchr(line, '|');
         if (p1 == NULL) continue;
@@ -210,6 +205,11 @@ static bool readNextEntry(Parser *parser, SymbolEntry *entry) {
         if (lineLen >= sizeof(lineField)) lineLen = sizeof(lineField) - 1;
         strncpy(lineField, line, lineLen);
         trimWhitespace(lineField);
+
+        // Skip header ("LINE"), divider ("==="), and wrapped continuation rows ("")
+        if (!isdigit((unsigned char)lineField[0])) {
+            continue;
+        }
 
         size_t colLen = (size_t)(p2 - (p1 + 1));
         if (colLen >= sizeof(colField)) colLen = sizeof(colField) - 1;
