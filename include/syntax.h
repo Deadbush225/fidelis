@@ -31,6 +31,13 @@ typedef struct {
     int symbolTableLine;    // Line number in symbol_table.txt
 } SymbolEntry;
 
+typedef struct ParseNode {
+    char label[128];
+    struct ParseNode **children;
+    size_t childCount;
+    size_t childCapacity;
+} ParseNode;
+
 // ============================================================================
 // PARSER STATE
 // ============================================================================
@@ -49,7 +56,15 @@ typedef struct {
     int errorCount;             // Total number of errors detected
     int recoveryAttempts;       // Number of panic recovery attempts
     char defaultRecoveryChoice; // Uppercase recovery choice to reuse ('C', 'S', or 'A')
+    ParseNode *root;
+    ParseNode *currentNode;
+    bool suppressTree;
 } Parser;
+
+ParseNode *addChildNode(ParseNode *parent, const char *label);
+ParseNode *wrapChildrenFrom(ParseNode *parent, size_t startIdx, const char *label);
+void printParseTree(FILE *out, const ParseNode *root);
+void freeParseTree(ParseNode *node);
 
 // ============================================================================
 // PARSER API

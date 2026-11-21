@@ -4,6 +4,117 @@
 #include <ctype.h>
 #include <stdlib.h>
 
+static ParseNode *createNode(const char *label) {
+    ParseNode *node = (ParseNode *)calloc(1, sizeof(ParseNode));
+    if (node == NULL) return NULL;
+    if (label != NULL) {
+        strncpy(node->label, label, sizeof(node->label) - 1);
+        node->label[sizeof(node->label) - 1] = '\0';
+    }
+    return node;
+}
+
+ParseNode *addChildNode(ParseNode *parent, const char *label) {
+    if (parent == NULL) return NULL;
+
+    if (parent->childCount == parent->childCapacity) {
+        size_t newCapacity = parent->childCapacity == 0 ? 4 : parent->childCapacity * 2;
+        ParseNode **newChildren = (ParseNode **)realloc(
+            parent->children, newCapacity * sizeof(ParseNode *));
+        if (newChildren == NULL) return NULL;
+        parent->children = newChildren;
+        parent->childCapacity = newCapacity;
+    }
+
+    ParseNode *child = createNode(label);
+    if (child == NULL) return NULL;
+    parent->children[parent->childCount++] = child;
+    return child;
+}
+
+ParseNode *wrapChildrenFrom(ParseNode *parent, size_t startIdx, const char *label) {
+    if (parent == NULL || startIdx > parent->childCount) return NULL;
+
+    size_t movedCount = parent->childCount - startIdx;
+    ParseNode *wrapper = addChildNode(parent, label);
+    if (wrapper == NULL) return NULL;
+
+    if (movedCount > 0) {
+        wrapper->children = (ParseNode **)calloc(movedCount, sizeof(ParseNode *));
+        if (wrapper->children == NULL) {
+            return NULL;
+        }
+        for (size_t i = 0; i < movedCount; i++) {
+            wrapper->children[i] = parent->children[startIdx + i];
+        }
+        wrapper->childCount = movedCount;
+        wrapper->childCapacity = movedCount;
+    }
+
+    parent->childCount = startIdx;
+    parent->children[startIdx] = wrapper;
+    parent->childCount = startIdx + 1;
+    return wrapper;
+}
+
+static void printParseTreeRecursive(FILE *out, const ParseNode *node,
+                                    bool branchStack[256], size_t depth) {
+    if (out == NULL || node == NULL) return;
+
+    for (size_t i = 1; i < depth; i++) {
+        fputs(branchStack[i] ? "│   " : "    ", out);
+    }
+    if (depth > 0) {
+        fputs(branchStack[depth] ? "├── " : "└── ", out);
+    }
+    fprintf(out, "%s\n", node->label);
+
+    for (size_t i = 0; i < node->childCount; i++) {
+        branchStack[depth + 1] = (i + 1 < node->childCount);
+        printParseTreeRecursive(out, node->children[i], branchStack, depth + 1);
+    }
+}
+
+void printParseTree(FILE *out, const ParseNode *root) {
+    bool branchStack[256] = {false};
+    if (out == NULL || root == NULL) return;
+    printParseTreeRecursive(out, root, branchStack, 0);
+}
+
+void freeParseTree(ParseNode *node) {
+    if (node == NULL) return;
+    for (size_t i = 0; i < node->childCount; i++) {
+        freeParseTree(node->children[i]);
+    }
+    free(node->children);
+    free(node);
+}
+
+static bool isTreeIgnoredToken(const char *type) {
+    static const char *ignored[] = {
+        "EOF", "SEMICOLON", "LPAREN", "RPAREN", "LBRACE",
+        "RBRACE", "COMMA", "COLON"
+    };
+    if (type == NULL) return true;
+    for (size_t i = 0; i < sizeof(ignored) / sizeof(ignored[0]); i++) {
+        if (strcasecmp(type, ignored[i]) == 0) return true;
+    }
+    return false;
+}
+
+static bool isTreeValuedToken(const char *type) {
+    static const char *valued[] = {
+        "IDENTIFIER", "INT_LITERAL", "FLOAT_LITERAL", "STRING_LITERAL",
+        "CHAR_LITERAL", "TRUE", "FALSE", "NULL", "INT", "FLOAT",
+        "STRING", "BOOL", "CHAR"
+    };
+    if (type == NULL) return false;
+    for (size_t i = 0; i < sizeof(valued) / sizeof(valued[0]); i++) {
+        if (strcasecmp(type, valued[i]) == 0) return true;
+    }
+    return false;
+}
+
 /*
 trimWhitespace - Trims leading and trailing whitespace from a string in-place.
 
@@ -213,16 +324,13 @@ bool initParser(Parser *parser, const char *sourceFilePath, const char *symTable
     parser->encounteredError = false;
     parser->errorCount = 0;
     parser->recoveryAttempts = 0;
+    parser->root = createNode("Program");
+    parser->currentNode = parser->root;
+    parser->suppressTree = false;
 
     if (!readNextEntry(parser, &parser->currentToken)) {
         parser->hasMoreTokens = false;
     }
-
-    fprintf(parser->output, "================================================================================\n");
-    fprintf(parser->output, "  FIDELIS RECURSIVE DESCENT PARSER - PARSE TRACE\n");
-    fprintf(parser->output, "  Source: %s\n", parser->sourceFilePath[0] ? parser->sourceFilePath : "(unknown)");
-    fprintf(parser->output, "  Input:  %s\n", symTablePath);
-    fprintf(parser->output, "================================================================================\n\n");
 
     return true;
 }
@@ -237,11 +345,13 @@ Parameters:
 void advanceToken(Parser *parser) {
     if (parser == NULL || !parser->hasMoreTokens) return;
 
-    fprintf(parser->output, "  [Line %3d, Col %3d] Consumed: %-20s | Lexeme: %s\n",
-            parser->currentToken.sourceLine,
-            parser->currentToken.sourceColumn,
-            parser->currentToken.type,
-            parser->currentToken.lexeme);
+    if (!parser->suppressTree && parser->currentNode != NULL &&
+        !isTreeIgnoredToken(parser->currentToken.type)) {
+        ParseNode *typeNode = addChildNode(parser->currentNode, parser->currentToken.type);
+        if (typeNode != NULL && isTreeValuedToken(parser->currentToken.type)) {
+            addChildNode(typeNode, parser->currentToken.lexeme);
+        }
+    }
 
     if (!readNextEntry(parser, &parser->currentToken)) {
         parser->hasMoreTokens = false;
@@ -263,20 +373,13 @@ void closeParser(Parser *parser) {
     }
 
     if (parser->output != NULL) {
-        // Write summary
-        fprintf(parser->output, "\n================================================================================\n");
-        fprintf(parser->output, "  PARSE SUMMARY\n");
-        fprintf(parser->output, "================================================================================\n");
-        if (parser->errorCount == 0) {
-            fprintf(parser->output, "  [OK] Parsing completed successfully - no syntax errors detected.\n");
-        } else {
-            fprintf(parser->output, "  [ERR] Parsing completed with %d error(s).\n", parser->errorCount);
-            fprintf(parser->output, "    Recovery attempts: %d\n", parser->recoveryAttempts);
-        }
-        fprintf(parser->output, "================================================================================\n");
         fclose(parser->output);
         parser->output = NULL;
     }
+
+    freeParseTree(parser->root);
+    parser->root = NULL;
+    parser->currentNode = NULL;
 }
 
 // ============================================================================
@@ -454,7 +557,12 @@ Parameters:
     const char *context  - Description of what was being parsed.
 */
 void panicRecovery(Parser *parser, const char *syncTokens[], int syncCount, const char *context) {
-    if (parser == NULL || syncTokens == NULL || syncCount == 0) return;
+    if (parser == NULL) return;
+    parser->suppressTree = true;
+    if (syncTokens == NULL || syncCount == 0) {
+        parser->suppressTree = false;
+        return;
+    }
 
     parser->recoveryAttempts++;
 
@@ -495,6 +603,7 @@ void panicRecovery(Parser *parser, const char *syncTokens[], int syncCount, cons
         fprintf(stderr, "  \e[1;31mParsing aborted by user.\e[0m\n");
         fprintf(parser->output, "  Parsing aborted by user during recovery.\n");
         parser->hasMoreTokens = false;
+        parser->suppressTree = false;
         return;
     } else if (userChoice == 'S' || userChoice == 's') {
         // Skip until we find a semicolon or a block delimiter
@@ -510,6 +619,7 @@ void panicRecovery(Parser *parser, const char *syncTokens[], int syncCount, cons
         }
         fprintf(stderr, "  \e[1;33mStatement skipped.\e[0m\n");
         fprintf(parser->output, "  Statement skipped by user.\n");
+        parser->suppressTree = false;
         return;
     }
 
@@ -531,6 +641,7 @@ void panicRecovery(Parser *parser, const char *syncTokens[], int syncCount, cons
         fprintf(stderr, "  \e[1;33mRecovery complete - no tokens needed skipping.\e[0m\n");
     }
     fprintf(parser->output, "  Recovery complete - %d token(s) skipped.\n", tokensSkipped);
+    parser->suppressTree = false;
 }
 
 // ============================================================================
@@ -563,17 +674,8 @@ bool parseSourceFile(const char *sourceFilePath, const char *symbolTablePath, co
         return false;
     }
 
-    fprintf(parser.output, "Starting recursive descent parsing...\n");
-    fprintf(parser.output, "Input symbol table: %s\n\n", symbolTablePath);
-
     bool success = parseProgram(&parser);
-
-    fprintf(parser.output, "\n");
-    if (success) {
-        fprintf(parser.output, "[OK] Program parsed successfully - no syntax errors.\n");
-    } else {
-        fprintf(parser.output, "[ERR] Program parsed with %d error(s).\n", parser.errorCount);
-    }
+    printParseTree(parser.output, parser.root);
 
     closeParser(&parser);
     return success;
