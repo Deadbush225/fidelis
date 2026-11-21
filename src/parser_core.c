@@ -49,12 +49,23 @@ ParseNode *wrapChildrenFrom(ParseNode *parent, size_t startIdx, const char *labe
         }
         wrapper->childCount = movedCount;
         wrapper->childCapacity = movedCount;
+        wrapper->line   = wrapper->children[0]->line;
+        wrapper->column = wrapper->children[0]->column;
     }
 
     parent->childCount = startIdx;
     parent->children[startIdx] = wrapper;
     parent->childCount = startIdx + 1;
     return wrapper;
+}
+
+ParseNode *addChildNodeAt(ParseNode *parent, const char *label, int line, int column) {
+    ParseNode *child = addChildNode(parent, label);
+    if (child != NULL) {
+        child->line = line;
+        child->column = column;
+    }
+    return child;
 }
 
 static void printParseTreeRecursive(FILE *out, const ParseNode *node,
@@ -345,9 +356,22 @@ void advanceToken(Parser *parser) {
 
     if (!parser->suppressTree && parser->currentNode != NULL &&
         !isTreeIgnoredToken(parser->currentToken.type)) {
-        ParseNode *typeNode = addChildNode(parser->currentNode, parser->currentToken.type);
-        if (typeNode != NULL && isTreeValuedToken(parser->currentToken.type)) {
-            addChildNode(typeNode, parser->currentToken.lexeme);
+        ParseNode *typeNode = addChildNodeAt(
+            parser->currentNode,
+            parser->currentToken.type,
+            parser->currentToken.sourceLine,
+            parser->currentToken.sourceColumn
+        );
+        if (typeNode != NULL) {
+            typeNode->isToken = true;
+            strncpy(typeNode->lexeme, parser->currentToken.lexeme, sizeof(typeNode->lexeme) - 1);
+            typeNode->lexeme[sizeof(typeNode->lexeme) - 1] = '\0';
+
+            if (isTreeValuedToken(parser->currentToken.type)) {
+                addChildNodeAt(typeNode, parser->currentToken.lexeme,
+                               parser->currentToken.sourceLine,
+                               parser->currentToken.sourceColumn);
+            }
         }
     }
 
@@ -451,7 +475,9 @@ bool matchToken(Parser *parser, const char *expected) {
 // ============================================================================
 // ============================================================================
 
-static void printSourceSnippet(FILE *dest, const char *sourceFilePath, int targetLine, int targetCol, const char *lexeme, bool useColor) {
+void printSourceSnippet(FILE *dest, const char *sourceFilePath,
+                        int targetLine, int targetCol,
+                        const char *lexeme, bool useColor) {
     if (sourceFilePath == NULL || sourceFilePath[0] == '\0' || targetLine <= 0) {
         return;
     }
@@ -660,7 +686,9 @@ Parameters:
 Returns:
     bool - true if parsing completed successfully (no syntax errors).
 */
-bool parseSourceFile(const char *sourceFilePath, const char *symbolTablePath, const char *outputPath) {
+bool parseSourceFile(const char *sourceFilePath, const char *symbolTablePath,
+                     const char *outputPath, ParseNode **outRoot) {
+    if (outRoot != NULL) *outRoot = NULL;
     if (symbolTablePath == NULL || outputPath == NULL) {
         fprintf(stderr, "Error: Invalid file paths provided to parser.\n");
         return false;
@@ -674,6 +702,12 @@ bool parseSourceFile(const char *sourceFilePath, const char *symbolTablePath, co
 
     bool success = parseProgram(&parser);
     printParseTree(parser.output, parser.root);
+
+    if (outRoot != NULL) {
+        *outRoot = parser.root;
+        parser.root = NULL;         // caller now owns and frees the tree
+        parser.currentNode = NULL;
+    }
 
     closeParser(&parser);
     return success;

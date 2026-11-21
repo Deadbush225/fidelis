@@ -13,7 +13,12 @@
     ParseNode *_prevNode = (p)->currentNode
 
 #define NODE(name) \
-    do { (parser)->currentNode = addChildNode((parser)->currentNode, (name)); } while (0)
+    do { \
+        (parser)->currentNode = addChildNodeAt( \
+            (parser)->currentNode, (name), \
+            (parser)->currentToken.sourceLine, \
+            (parser)->currentToken.sourceColumn); \
+    } while (0)
 
 #define PASS() \
     do { (parser)->currentNode = _prevNode; return true; } while (0)
@@ -700,7 +705,6 @@ bool parseMatchStmt(Parser *parser) {
                 reportError(parser, "Expected a number after '+' or '-' in match case.");
                 FAIL();
             }
-            parser->currentNode = matchNode;
             advanceToken(parser);
             caseCount++;
         } else if (CHECK_ANY("STRING_LITERAL", "IDENTIFIER", "INT_LITERAL", "FLOAT_LITERAL",

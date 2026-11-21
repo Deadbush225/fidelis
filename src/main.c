@@ -16,7 +16,7 @@
 // FUNCTION PROTOTYPES
 // ============================================================================
 static int runLexer(const char *inputFileName, const char *symbolTableFilePath, const char *transitionTraceOutputPath);
-static int runParser(const char *inputFileName, const char *symbolTableFilePath, const char *parseOutputPath);
+static int runParser(const char *inputFileName, const char *symbolTableFilePath, const char *parseOutputPath, ParseNode **outRoot);
 // ============================================================================
 // MAIN - Entry point
 // ============================================================================
@@ -75,7 +75,15 @@ int main(int argc, char *argv[]) {
     printf("  PHASE 2: SYNTAX ANALYSIS (Recursive Descent Parser)\n");
     printf("===============================================================\n\n");
 
-    int parseResult = runParser(inputFileName, symbolTableFilePath, parseOutputPath);
+    ParseNode *parseTree = NULL;
+    int parseResult = runParser(inputFileName, symbolTableFilePath, parseOutputPath, &parseTree);
+
+    int semanticResult = 0;
+    if (parseResult == 0 && parseTree != NULL) {
+        // Phase 3: Semantic Analysis (not implemented yet)
+        // semanticResult = runSemanticAnalysis(parseTree);
+        freeParseTree(parseTree);
+    }
 
     /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
      *  SUMMARY
@@ -174,10 +182,11 @@ static int runLexer(const char *inputFileName, const char *symbolTableFilePath, 
 // ============================================================================
 // runParser - Phase 2: Recursive Descent Parsing of the symbol table
 // ============================================================================
-static int runParser(const char *inputFileName, const char *symbolTableFilePath, const char *parseOutputPath) {
+static int runParser(const char *inputFileName, const char *symbolTableFilePath,
+                     const char *parseOutputPath, ParseNode **outRoot) {
     printf("Parsing symbol table: %s\n\n", symbolTableFilePath);
 
-    bool success = parseSourceFile(inputFileName, symbolTableFilePath, parseOutputPath);
+    bool success = parseSourceFile(inputFileName, symbolTableFilePath, parseOutputPath, outRoot);
 
     if (success) {
         printf("  \e[1;32m[OK] Syntax analysis complete - No syntax errors.\e[0m\n");

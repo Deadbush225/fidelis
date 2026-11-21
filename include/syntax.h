@@ -32,7 +32,11 @@ typedef struct {
 } SymbolEntry;
 
 typedef struct ParseNode {
-    char label[128];
+    char label[128];        // Non-terminal ("VarDecl") or token type ("IDENTIFIER")
+    char lexeme[256];       // Raw token text for tokens ("" for non-terminals)
+    int line;               // Starting line in the .fdls file
+    int column;             // Starting column in the .fdls file
+    bool isToken;           // true = terminal token node, false = grammar non-terminal
     struct ParseNode **children;
     size_t childCount;
     size_t childCapacity;
@@ -63,6 +67,8 @@ typedef struct {
 
 ParseNode *addChildNode(ParseNode *parent, const char *label);
 ParseNode *wrapChildrenFrom(ParseNode *parent, size_t startIdx, const char *label);
+// Optional convenience helper for stamping location on newly created nodes
+ParseNode *addChildNodeAt(ParseNode *parent, const char *label, int line, int column);
 void printParseTree(FILE *out, const ParseNode *root);
 void freeParseTree(ParseNode *node);
 
@@ -126,7 +132,14 @@ Parameters:
 Returns:
     bool - true if parsing completed successfully (no syntax errors).
 */
-bool parseSourceFile(const char *sourceFilePath, const char *symbolTablePath, const char *outputPath);
+bool parseSourceFile(const char *sourceFilePath,
+                     const char *symbolTablePath,
+                     const char *outputPath,
+                     ParseNode **outRoot);
+
+void printSourceSnippet(FILE *dest, const char *sourceFilePath,
+                        int targetLine, int targetCol,
+                        const char *lexeme, bool useColor);
 
 // ============================================================================
 // TOKEN MATCHING HELPERS
