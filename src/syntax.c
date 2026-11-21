@@ -322,16 +322,6 @@ bool parseSleepStmt(Parser *parser) {
 //   3. int x = a + b * 2;    (expression assignment)
 // ----------------------------------------------------------------------------
 
-// Shared prefix: Type, Identifier, [ "is" ], "="
-static bool parseDeclPrefix(Parser *parser) {
-    GUARD(parser);
-    REQUIRE(parseType(parser));
-    EXPECT_LOG("IDENTIFIER", "Variable", "Expected a variable name after type.");
-    OPT_NOISE("is");
-    EXPECT("ASSIGNMENT", "Expected '=' in variable declaration.");
-    PASS();
-}
-
 // Handles both top-level/block declarations:
 //   VarDecl = Type, Identifier, [ "=", Expression ] ;
 //   EnsureStmt = Type, Identifier, [ "=", "ensure", Expression, "else", Block ;
@@ -551,7 +541,7 @@ bool parseType(Parser *parser) {
 // [ "[", Expression, "]" ], AssignOp, Expression
 static bool parseAssignmentTail(Parser *parser) {
     GUARD(parser);
-    if (OPT("LBRACKET")) {
+    while (OPT("LBRACKET")) {
         REQUIRE(parseExpression(parser));
         EXPECT("RBRACKET", "Expected ']' after array index. Syntax: arrayName[index] = value;");
     }
@@ -830,8 +820,8 @@ bool parseReturnStmt(Parser *parser) {
 //
 // The expression parser implements the full operator precedence hierarchy:
 //
-//   Level 11: Ternary            (right-to-left)
-//   Level 10: Pipeline           (left-to-right)
+//   Level 11: Pipeline           (left-to-right)
+//   Level 10: Ternary            (right-to-left)
 //   Level  9: Logical OR  (||)   (left-to-right)
 //   Level  8: Logical AND (&&)   (left-to-right)
 //   Level  7: Equality (==, !=)  (left-to-right)
@@ -844,19 +834,53 @@ bool parseReturnStmt(Parser *parser) {
 // ============================================================================
 
 // --------------------------------------------------------------------------
-// Expression (Level 11): Ternary
-// Expression = TernaryExpr ;
-// TernaryExpr = LogicalOrExpr, [ "?", Expression, ":", TernaryExpr ] ;
+// Level 11 (Lowest): Pipeline (left-to-right)
+// Expression     = PipelineExpr ;
+// PipelineTarget = FunctionCall | ( "print", "(", [ ArgList ], ")" ) ;
+// PipelineExpr   = TernaryExpr, { "|>", PipelineTarget } ;
 // --------------------------------------------------------------------------
 bool parseExpression(Parser *parser) {
-    return parseTernaryExpr(parser);
+    return parsePipelineExpr(parser);
 }
 
+bool parsePipelineExpr(Parser *parser) {
+    GUARD(parser);
+    size_t startIdx = parser->currentNode->childCount;
+    bool matchedOperator = false;
+    REQUIRE(parseTernaryExpr(parser));
+
+    while (OPT("PIPELINE")) {
+        matchedOperator = true;
+        ParseNode *pipeParent = parser->currentNode;
+        NODE("FunctionCall");
+
+        if (CHECK_ANY("IDENTIFIER", "PRINT")) {
+            advanceToken(parser);
+        } else {
+            reportError(parser, "Expected a function name or 'print' after '|>' pipeline operator.");
+            parser->currentNode = pipeParent;
+            FAIL();
+        }
+
+        EXPECT("LPAREN", "Expected '(' after function name in pipeline.");
+        if (!checkToken(parser, "RPAREN")) REQUIRE(parseArgList(parser));
+        EXPECT("RPAREN", "Expected ')' after pipeline function arguments.");
+        parser->currentNode = pipeParent;
+    }
+
+    if (matchedOperator) wrapChildrenFrom(parser->currentNode, startIdx, "PipelineExpr");
+    PASS();
+}
+
+// --------------------------------------------------------------------------
+// Level 10: Ternary Conditional (right-to-left)
+// TernaryExpr = LogicalOrExpr, [ "?", Expression, ":", TernaryExpr ] ;
+// --------------------------------------------------------------------------
 bool parseTernaryExpr(Parser *parser) {
     GUARD(parser);
     size_t startIdx = parser->currentNode->childCount;
     bool matchedOperator = false;
-    REQUIRE(parsePipelineExpr(parser));
+    REQUIRE(parseLogicalOrExpr(parser));
 
     if (OPT("QUESTION")) {
         matchedOperator = true;
@@ -864,34 +888,14 @@ bool parseTernaryExpr(Parser *parser) {
         EXPECT("COLON", "Expected ':' in ternary expression.");
         REQUIRE(parseTernaryExpr(parser));
     }
+
     if (matchedOperator) wrapChildrenFrom(parser->currentNode, startIdx, "TernaryExpr");
-    PASS();
-}
-
-// Level 10: PipelineExpr = LogicalOrExpr, { "|>", Identifier, "(", [ ArgList ], ")" } ;
-bool parsePipelineExpr(Parser *parser) {
-    GUARD(parser);
-    size_t startIdx = parser->currentNode->childCount;
-    bool matchedOperator = false;
-    REQUIRE(parseLogicalOrExpr(parser));
-
-    while (OPT("PIPELINE")) {
-        matchedOperator = true;
-        ParseNode *pipeParent = parser->currentNode;
-        NODE("FunctionCall");
-        EXPECT("IDENTIFIER", "Expected a function name after '|>' pipeline operator.");
-        EXPECT("LPAREN", "Expected '(' after function name in pipeline.");
-        if (!checkToken(parser, "RPAREN")) REQUIRE(parseArgList(parser));
-        EXPECT("RPAREN", "Expected ')' after pipeline function arguments.");
-        parser->currentNode = pipeParent;
-    }
-    if (matchedOperator) wrapChildrenFrom(parser->currentNode, startIdx, "PipelineExpr");
     PASS();
 }
 
 // --------------------------------------------------------------------------
 // Level 9: Logical OR
-// PipelineExpr = LogicalOrExpr, { "|>", FunctionCall } ;
+// LogicalOrExpr = LogicalAndExpr, { "||", LogicalAndExpr } ;
 // --------------------------------------------------------------------------
 bool parseLogicalOrExpr(Parser *parser) {
     return LEFT_ASSOC(parseLogicalAndExpr, "LogicalOrExpr", "LOGICAL_OR");
@@ -956,17 +960,45 @@ bool parseUnaryExpr(Parser *parser) {
 // Level 2: Exponent (right-to-left)
 // ExponentExpr = PrimaryExpr, [ "^", ExponentExpr ] ;
 // --------------------------------------------------------------------------
+static bool parsePostfixExpr(Parser *parser); // Forward declaration
 bool parseExponentExpr(Parser *parser) {
     GUARD(parser);
     size_t startIdx = parser->currentNode->childCount;
     bool matchedOperator = false;
-    REQUIRE(parsePrimaryExpr(parser));
+    REQUIRE(parsePostfixExpr(parser));
 
     if (OPT("EXPONENT")) {
         matchedOperator = true;
         REQUIRE(parseExponentExpr(parser));
     }
     if (matchedOperator) wrapChildrenFrom(parser->currentNode, startIdx, "ExponentExpr");
+    PASS();
+}
+
+// --------------------------------------------------------------------------
+// Level 1.5: Postfix Access (left-to-right)
+// PostfixExpr = PrimaryExpr, { "[", Expression, "]" | ".", Identifier | "(", [ ArgList ], ")" } ;
+// --------------------------------------------------------------------------
+static bool parsePostfixExpr(Parser *parser) {
+    GUARD(parser);
+    size_t startIdx = parser->currentNode->childCount;
+    REQUIRE(parsePrimaryExpr(parser));
+
+    while (CHECK_ANY("LPAREN", "LBRACKET", "DOT")) {
+        if (OPT("LPAREN")) {
+            if (!checkToken(parser, "RPAREN")) REQUIRE(parseArgList(parser));
+            EXPECT("RPAREN", "Expected ')' after function call arguments.");
+            wrapChildrenFrom(parser->currentNode, startIdx, "FunctionCall");
+        } else if (OPT("LBRACKET")) {
+            REQUIRE(parseExpression(parser));
+            EXPECT("RBRACKET", "Expected ']' after array index.");
+            wrapChildrenFrom(parser->currentNode, startIdx, "ArrayAccess");
+        } else if (OPT("DOT")) {
+            EXPECT_LOG("IDENTIFIER", "Property", "Expected a property name after '.'.");
+            wrapChildrenFrom(parser->currentNode, startIdx, "PropertyAccess");
+        }
+    }
+
     PASS();
 }
 
@@ -1016,7 +1048,7 @@ bool parsePrimaryExpr(Parser *parser) {
     // Array literal: '[' [ ArgList ] ']'
     if (checkToken(parser, "LBRACKET")) {
         NODE("ArrayLiteral");
-        advanceToken(parser); // '[' now attaches inside ArrayLiteral
+        advanceToken(parser);
         if (!checkToken(parser, "RBRACKET")) REQUIRE(parseArgList(parser));
         EXPECT("RBRACKET", "Expected ']' to close array literal.");
         PASS();
@@ -1032,28 +1064,8 @@ bool parsePrimaryExpr(Parser *parser) {
         PASS();
     }
 
-    // Identifier + optional postfix: call '()', index '[]', or property '.prop'
+    // Bare identifier (postfixes are handled by parsePostfixExpr)
     if (checkToken(parser, "IDENTIFIER")) {
-        size_t startIdx = parser->currentNode->childCount;
-        advanceToken(parser);
-
-        if (OPT("LPAREN")) {
-            if (!checkToken(parser, "RPAREN")) REQUIRE(parseArgList(parser));
-            EXPECT("RPAREN", "Expected ')' after function call arguments.");
-            wrapChildrenFrom(parser->currentNode, startIdx, "FunctionCall");
-        } else if (OPT("LBRACKET")) {
-            REQUIRE(parseExpression(parser));
-            EXPECT("RBRACKET", "Expected ']' after array index.");
-            wrapChildrenFrom(parser->currentNode, startIdx, "ArrayAccess");
-        } else if (OPT("DOT")) {
-            EXPECT_LOG("IDENTIFIER", "Property", "Expected a property name after '.'.");
-            wrapChildrenFrom(parser->currentNode, startIdx, "PropertyAccess");
-        }
-        PASS();
-    }
-
-    // Noise word fallback
-    if (checkToken(parser, "NOISE_WORD")) {
         advanceToken(parser);
         PASS();
     }
