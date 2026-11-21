@@ -103,9 +103,8 @@ static bool isTreeIgnoredToken(const char *type) {
 
 static bool isTreeValuedToken(const char *type) {
     static const char *valued[] = {
-        "IDENTIFIER", "INT_LITERAL", "FLOAT_LITERAL", "STRING_LITERAL",
-        "CHAR_LITERAL", "TRUE", "FALSE", "NULL", "INT", "FLOAT",
-        "STRING", "BOOL", "CHAR"
+        "IDENTIFIER", "INT_LITERAL", "FLOAT_LITERAL",
+        "STRING_LITERAL", "CHAR_LITERAL"
     };
     if (type == NULL) return false;
     for (size_t i = 0; i < sizeof(valued) / sizeof(valued[0]); i++) {
