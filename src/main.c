@@ -3,6 +3,7 @@
 #include "lexer.h"
 #include "helper.h"
 #include "syntax.h"
+#include "semantic.h"
 
 #ifdef _WIN32
     #include <direct.h> // Windows specific header for mkdir
@@ -55,6 +56,7 @@ int main(int argc, char *argv[]) {
     const char *symbolTableFilePath   = "outputs/symbol_table.txt";
     const char *transitionTracePath   = "outputs/transition_trace.txt";
     const char *parseOutputPath       = "outputs/parse_tree.txt";
+    const char *semanticOutputPath = "outputs/semantic_report.txt";
 
     /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
      *  PHASE 1: LEXICAL ANALYSIS
@@ -75,15 +77,29 @@ int main(int argc, char *argv[]) {
     printf("  PHASE 2: SYNTAX ANALYSIS (Recursive Descent Parser)\n");
     printf("===============================================================\n\n");
 
+    // Phase 2: Syntax Analysis
     ParseNode *parseTree = NULL;
     int parseResult = runParser(inputFileName, symbolTableFilePath, parseOutputPath, &parseTree);
 
-    int semanticResult = 0;
+    // Phase 3: Semantic Analysis
+    int semanticResult = 1;
     if (parseResult == 0 && parseTree != NULL) {
-        // Phase 3: Semantic Analysis (not implemented yet)
-        // semanticResult = runSemanticAnalysis(parseTree);
-        freeParseTree(parseTree);
+        printf("\n===============================================================\n");
+        printf("  PHASE 3: SEMANTIC ANALYSIS\n");
+        printf("===============================================================\n\n");
+
+        bool semOk = analyzeSemantics(inputFileName, parseTree, semanticOutputPath);
+        semanticResult = semOk ? 0 : 1;
+
+        if (semOk) {
+            printf("  \e[1;32m[OK] Semantic analysis complete - No semantic errors.\e[0m\n");
+        } else {
+            printf("  \e[1;31m[ERR] Semantic analysis complete - Errors detected.\e[0m\n");
+        }
+        printf("  Semantic report written to: %s\n", semanticOutputPath);
     }
+
+    freeParseTree(parseTree);
 
     /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
      *  SUMMARY
