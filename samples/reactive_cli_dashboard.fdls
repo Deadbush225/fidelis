@@ -55,6 +55,14 @@ fn healthLabel(int usage) : string {
     }
 }
 
+int? x = 1;
+int y = 0;
+
+y = ensure x else {
+    print("x must be a valid integer.");
+    quit;
+}
+
 print("Starting Fidelis Reactive CLI...");
 sleep(1);
 

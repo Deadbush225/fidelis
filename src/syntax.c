@@ -217,6 +217,7 @@ bool parseProgram(Parser *parser) {
 // Block statements are self-delimiting (they contain their own braces).
 // Simple statements must be followed by a semicolon.
 // ----------------------------------------------------------------------------
+static bool parseIdentOrEnsureStmt(Parser *parser); // Forward Declaration
 bool parseStatement(Parser *parser) {
     GUARD(parser);
     NODE("Statement");
@@ -225,6 +226,7 @@ bool parseStatement(Parser *parser) {
     if (OPT("SEMICOLON")) PASS();
     // Distinguish between a variable declaration and an ensure statement
     if (isTypeStart(parser)) RETURN(parseDeclOrEnsureStmt(parser));
+    if (checkToken(parser, "IDENTIFIER")) RETURN(parseIdentOrEnsureStmt(parser));
     if (CHECK_ANY("IF", "LOOP", "FOR", "MATCH", "STATE", "REACT", "FN")) {
         RETURN(parseBlockStatement(parser));
     }
@@ -583,6 +585,52 @@ bool parseIdentStmt(Parser *parser) {
         PASS();
     }
     RETURN(parseAssignmentTail(parser));
+}
+
+// Handles statements starting with IDENTIFIER:
+//   1. func(args);                       -> SimpleStatement -> FunctionCall
+//   2. x = ensure expr else { ... }      -> BlockStatement  -> EnsureStmt (no ';')
+//   3. x = expr; / x[i] = expr; / x+=1;  -> SimpleStatement -> Assignment
+static bool parseIdentOrEnsureStmt(Parser *parser) {
+    GUARD(parser);
+    NODE("SimpleStatement");
+    ParseNode *kindNode = parser->currentNode;
+    NODE("Assignment");
+    ParseNode *stmtNode = parser->currentNode;
+
+    EXPECT_LOG("IDENTIFIER", "Target", "Expected an identifier.");
+
+    if (OPT("LPAREN")) {
+        strncpy(stmtNode->label, "FunctionCall", sizeof(stmtNode->label) - 1);
+        stmtNode->label[sizeof(stmtNode->label) - 1] = '\0';
+        if (!checkToken(parser, "RPAREN")) REQUIRE(parseArgList(parser));
+        EXPECT("RPAREN", "Expected ')' after function call arguments.");
+        parser->currentNode = _prevNode;
+        EXPECT_SEMI("Expected ';' after statement.", "statement termination");
+        PASS();
+    }
+
+    if (OPT("ASSIGNMENT")) {
+        if (OPT("ENSURE")) {
+            strncpy(kindNode->label, "BlockStatement", sizeof(kindNode->label) - 1);
+            kindNode->label[sizeof(kindNode->label) - 1] = '\0';
+            strncpy(stmtNode->label, "EnsureStmt", sizeof(stmtNode->label) - 1);
+            stmtNode->label[sizeof(stmtNode->label) - 1] = '\0';
+            REQUIRE(parseExpression(parser));
+            EXPECT("ELSE", "Expected 'else' in ensure statement.");
+            RETURN(parseBlock(parser));
+        }
+
+        REQUIRE(parseExpression(parser));
+        parser->currentNode = _prevNode;
+        EXPECT_SEMI("Expected ';' after statement.", "statement termination");
+        PASS();
+    }
+
+    REQUIRE(parseAssignmentTail(parser));
+    parser->currentNode = _prevNode;
+    EXPECT_SEMI("Expected ';' after statement.", "statement termination");
+    PASS();
 }
 
 // ----------------------------------------------------------------------------

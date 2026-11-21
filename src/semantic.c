@@ -1201,14 +1201,32 @@ static void analyzeEnsureStmt(SemanticAnalyzer *sa, const ParseNode *node) {
     const ParseNode *exprNode  = firstMeaningfulAfter(node, "ENSURE", 0);
     const ParseNode *elseBlock = findChild(node, "Block", 0);
 
-    SemType declType = resolveTypeNode(sa, typeNode);
-    SemType exprType = analyzeExpression(sa, exprNode);
-
-    if (!isErrorType(declType) && declType.isNullable) {
-        semWarning(sa, typeNode,
-                   "Variable '%s' in 'ensure' statement is declared nullable; 'ensure' is meant to unwrap into a non-nullable type.",
-                   nodeLexeme(nameNode));
+    SemType targetType;
+    if (typeNode != NULL) {
+        targetType = resolveTypeNode(sa, typeNode);
+        if (!isErrorType(targetType) && targetType.isNullable) {
+            semWarning(sa, typeNode,
+                       "Variable '%s' in 'ensure' statement is declared nullable; 'ensure' is meant to unwrap into a non-nullable type.",
+                       nodeLexeme(nameNode));
+        }
+    } else {
+        Symbol *existing = lookupSymbol(sa->currentScope, nodeLexeme(nameNode));
+        if (existing == NULL || existing->kind != SYM_VAR) {
+            semError(sa, nameNode ? nameNode : node,
+                     "Undeclared variable '%s' in 'ensure' statement.",
+                     nodeLexeme(nameNode));
+            targetType = makeErrorType();
+        } else {
+            targetType = existing->type;
+            if (!isErrorType(targetType) && targetType.isNullable) {
+                semWarning(sa, nameNode,
+                           "Variable '%s' in 'ensure' statement is nullable; 'ensure' is meant to unwrap into a non-nullable type.",
+                           nodeLexeme(nameNode));
+            }
+        }
     }
+
+    SemType exprType = analyzeExpression(sa, exprNode);
 
     if (!isErrorType(exprType)) {
         if (!exprType.isNullable && exprType.base != TYPE_NULL) {
@@ -1218,20 +1236,20 @@ static void analyzeEnsureStmt(SemanticAnalyzer *sa, const ParseNode *node) {
                        "Expression in 'ensure' has non-nullable type '%s' (unwrapping is redundant).", eBuf);
         }
 
-        // Unwrapped type must be assignable to declared type
+        // Unwrapped type must be assignable to target variable's type
         SemType unwrapped = exprType;
         unwrapped.isNullable = false;
-        if (exprType.base != TYPE_NULL && !isAssignable(declType, unwrapped)) {
+        if (!isErrorType(targetType) && exprType.base != TYPE_NULL && !isAssignable(targetType, unwrapped)) {
             char dBuf[64], uBuf[64];
-            formatSemType(declType, dBuf, sizeof(dBuf));
+            formatSemType(targetType, dBuf, sizeof(dBuf));
             formatSemType(unwrapped, uBuf, sizeof(uBuf));
             semError(sa, exprNode,
-                     "'ensure' unwrapped type '%s' does not match declared variable type '%s'.",
+                     "'ensure' unwrapped type '%s' does not match variable type '%s'.",
                      uBuf, dBuf);
         }
     }
 
-    // Validate the else block BEFORE defining the unwrapped variable in scope
+    // Validate the else block BEFORE defining a newly declared variable in scope
     if (elseBlock != NULL) {
         analyzeBlock(sa, elseBlock, "ensure_else", true);
         if (!nodeAlwaysExits(elseBlock)) {
@@ -1240,15 +1258,17 @@ static void analyzeEnsureStmt(SemanticAnalyzer *sa, const ParseNode *node) {
         }
     }
 
-    // Register unwrapped variable in the enclosing scope
-    Symbol sym;
-    memset(&sym, 0, sizeof(sym));
-    strncpy(sym.name, nodeLexeme(nameNode), sizeof(sym.name) - 1);
-    sym.kind = SYM_VAR;
-    sym.type = declType;
-    sym.line = nameNode ? nameNode->line : node->line;
-    sym.column = nameNode ? nameNode->column : node->column;
-    defineSymbol(sa, sa->currentScope, &sym, nameNode);
+    // Only register a new symbol if 'Type' was provided
+    if (typeNode != NULL) {
+        Symbol sym;
+        memset(&sym, 0, sizeof(sym));
+        strncpy(sym.name, nodeLexeme(nameNode), sizeof(sym.name) - 1);
+        sym.kind = SYM_VAR;
+        sym.type = targetType;
+        sym.line = nameNode ? nameNode->line : node->line;
+        sym.column = nameNode ? nameNode->column : node->column;
+        defineSymbol(sa, sa->currentScope, &sym, nameNode);
+    }
 }
 
 static void analyzeAssignment(SemanticAnalyzer *sa, const ParseNode *node) {

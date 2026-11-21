@@ -1200,6 +1200,29 @@ static void execEnsureStmt(Interpreter *ip, const ParseNode *node) {
         return;
     }
 
+    // Value is non-null: define if 'Type' was provided, otherwise update existing variable
+    const ParseNode *typeNode = findChild(node, "Type", 0);
+    const char *name = nodeLexeme(nameNode);
+
+    if (typeNode != NULL) {
+        envDefine(ip->currentEnv, name, val);
+    } else {
+        Env *ownerEnv = NULL;
+        VarBinding *binding = envLookup(ip->currentEnv, name, &ownerEnv);
+        if (binding == NULL) {
+            runtimeError(ip, nameNode, "Assignment to undefined variable '%s'.", name);
+            freeValue(val);
+            return;
+        }
+
+        freeValue(binding->value);
+        binding->value = val;
+
+        if (ownerEnv == ip->globalEnv) {
+            triggerReactWatchers(ip, name, node);
+        }
+    }
+
     if (val.kind == VAL_NULL) {
         freeValue(val);
         execBlock(ip, elseBlock, true);
