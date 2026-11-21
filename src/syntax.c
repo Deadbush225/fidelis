@@ -820,10 +820,13 @@ bool parsePipelineExpr(Parser *parser) {
 
     while (OPT("PIPELINE")) {
         matchedOperator = true;
-        EXPECT_LOG("IDENTIFIER", "Pipeline fn", "Expected a function name after '|>' pipeline operator.");
+        ParseNode *pipeParent = parser->currentNode;
+        NODE("FunctionCall");
+        EXPECT("IDENTIFIER", "Expected a function name after '|>' pipeline operator.");
         EXPECT("LPAREN", "Expected '(' after function name in pipeline.");
         if (!checkToken(parser, "RPAREN")) REQUIRE(parseArgList(parser));
         EXPECT("RPAREN", "Expected ')' after pipeline function arguments.");
+        parser->currentNode = pipeParent;
     }
     if (matchedOperator) wrapChildrenFrom(parser->currentNode, startIdx, "PipelineExpr");
     PASS();
@@ -954,8 +957,9 @@ bool parsePrimaryExpr(Parser *parser) {
     }
 
     // Array literal: '[' [ ArgList ] ']'
-    if (OPT("LBRACKET")) {
+    if (checkToken(parser, "LBRACKET")) {
         NODE("ArrayLiteral");
+        advanceToken(parser); // '[' now attaches inside ArrayLiteral
         if (!checkToken(parser, "RBRACKET")) REQUIRE(parseArgList(parser));
         EXPECT("RBRACKET", "Expected ']' to close array literal.");
         PASS();

@@ -92,8 +92,7 @@ void freeParseTree(ParseNode *node) {
 
 static bool isTreeIgnoredToken(const char *type) {
     static const char *ignored[] = {
-        "EOF", "SEMICOLON", "LPAREN", "RPAREN", "LBRACE",
-        "RBRACE", "COMMA", "COLON"
+        "EOF", "NOISE_WORD"
     };
     if (type == NULL) return true;
     for (size_t i = 0; i < sizeof(ignored) / sizeof(ignored[0]); i++) {
