@@ -48,6 +48,7 @@ typedef struct {
     bool encounteredError;      // Whether a syntax error has been encountered
     int errorCount;             // Total number of errors detected
     int recoveryAttempts;       // Number of panic recovery attempts
+    char defaultRecoveryChoice; // Uppercase recovery choice to reuse ('C', 'S', or 'A')
 } Parser;
 
 // ============================================================================

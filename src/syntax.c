@@ -5,9 +5,114 @@
 #include <stdlib.h>
 
 // ============================================================================
+// UTILITY MACROS
+// ============================================================================
+// Guard at the start of every production rule
+#define GUARD(p) \
+    do { if ((p) == NULL || !(p)->hasMoreTokens) return false; } while (0)
+
+// Require a terminal token, or report error and return false
+#define EXPECT(tok, msg) \
+    do { if (!expectToken(parser, (tok), (msg))) return false; } while (0)
+
+#define EXPECT_LOG(tok, label, msg) \
+    do { if (!expectTokenLogged(parser, (tok), (label), (msg))) return false; } while (0)
+
+// Expect a terminal or immediately run panic recovery
+#define EXPECT_SYNC(tok, msg, ctx, ...) \
+    do { \
+        if (!matchToken(parser, (tok))) { \
+            reportError(parser, (msg)); \
+            panicRecovery(parser, TOKEN_LIST(__VA_ARGS__), TOKEN_COUNT(__VA_ARGS__), (ctx)); \
+            return false; \
+        } \
+    } while (0)
+
+// Require a non-terminal production, or propagate failure
+#define REQUIRE(call) \
+    do { if (!(call)) return false; } while (0)
+
+// Require a non-terminal with a custom error message on failure
+#define REQUIRE_MSG(call, msg) \
+    do { if (!(call)) { reportError(parser, (msg)); return false; } } while (0)
+
+// Helper: ( Block | Statement )
+static bool parseBlockOrStmt(Parser *parser) {
+    return checkToken(parser, "LBRACE") ? parseBlock(parser) : parseStatement(parser);
+}
+
+// ============================================================================
+
+// Variadic helpers - no more manual arrays or magic element counts
+#define TOKEN_LIST(...)  ((const char *[]){ __VA_ARGS__ })
+#define TOKEN_COUNT(...) ((int)(sizeof(TOKEN_LIST(__VA_ARGS__)) / sizeof(const char *)))
+
+// EBNF primitives
+#define CHECK_ANY(...)   checkTokenAny(parser, TOKEN_LIST(__VA_ARGS__), TOKEN_COUNT(__VA_ARGS__))
+#define OPT(tok)         matchToken(parser, (tok))       // EBNF: [ "tok" ]
+#define OPT_NOISE(word)  matchNoise(parser, (word))      // EBNF: [ "do" | "is" | "to" ]
+
 // ============================================================================
 // UTILITY FUNCTIONS
 // ============================================================================
+// Matches an optional noise word like "do", "is", or "to"
+static bool matchNoise(Parser *parser, const char *word) {
+    if (checkToken(parser, "NOISE_WORD") &&
+        strcasecmp(parser->currentToken.lexeme, word) == 0) {
+        advanceToken(parser);
+        return true;
+    }
+    return false;
+}
+
+// Checks if the current token can start a Type (int, float, string, bool, char, '[')
+static bool isTypeStart(Parser *parser) {
+    static const char *types[] = {"INT", "FLOAT", "STRING", "BOOL", "CHAR", "LBRACKET"};
+    return checkTokenAny(parser, types, 6);
+}
+
+// Single-token expect helper with error reporting
+static bool expectToken(Parser *parser, const char *expected, const char *errorMsg) {
+    if (matchToken(parser, expected)) {
+        return true;
+    }
+    reportError(parser, errorMsg);
+    return false;
+}
+
+static bool parseLeftAssoc(
+    Parser *parser,
+    bool (*parseOperand)(Parser *),
+    const char *ops[],
+    int opCount,
+    const char *label,
+    const char *errMsg
+) {
+    GUARD(parser);
+    REQUIRE(parseOperand(parser));
+    while (checkTokenAny(parser, ops, opCount)) {
+        fprintf(parser->output, "        %s: %s\n", label, parser->currentToken.lexeme);
+        advanceToken(parser);
+        REQUIRE_MSG(parseOperand(parser), errMsg);
+    }
+    return true;
+}
+
+// Expect a terminal, log its lexeme BEFORE advancing (fixes the double-advance bug)
+static bool expectTokenLogged(Parser *parser, const char *expected, const char *label, const char *errMsg) {
+    if (!checkToken(parser, expected)) {
+        reportError(parser, errMsg);
+        return false;
+    }
+    fprintf(parser->output, "    %s: %s\n", label, parser->currentToken.lexeme);
+    advanceToken(parser);
+    return true;
+}
+
+// Left-associative binary precedence level: EBNF  Next, { (op1 | op2), Next }
+#define LEFT_ASSOC(operandFn, label, errMsg, ...) \
+    parseLeftAssoc(parser, (operandFn), TOKEN_LIST(__VA_ARGS__), TOKEN_COUNT(__VA_ARGS__), (label), (errMsg))
+
 // ============================================================================
 
 /*
@@ -225,7 +330,7 @@ bool initParser(Parser *parser, const char *sourceFilePath, const char *symTable
     }
 
     fprintf(parser->output, "================================================================================\n");
-    fprintf(parser->output, "  FIDELIS RECURSIVE DESCENT PARSER — PARSE TRACE\n");
+    fprintf(parser->output, "  FIDELIS RECURSIVE DESCENT PARSER - PARSE TRACE\n");
     fprintf(parser->output, "  Source: %s\n", parser->sourceFilePath[0] ? parser->sourceFilePath : "(unknown)");
     fprintf(parser->output, "  Input:  %s\n", symTablePath);
     fprintf(parser->output, "================================================================================\n\n");
@@ -274,7 +379,7 @@ void closeParser(Parser *parser) {
         fprintf(parser->output, "  PARSE SUMMARY\n");
         fprintf(parser->output, "================================================================================\n");
         if (parser->errorCount == 0) {
-            fprintf(parser->output, "  ✓ Parsing completed successfully — no syntax errors detected.\n");
+            fprintf(parser->output, "  [OK] Parsing completed successfully - no syntax errors detected.\n");
         } else {
             fprintf(parser->output, "  ✗ Parsing completed with %d error(s).\n", parser->errorCount);
             fprintf(parser->output, "    Recovery attempts: %d\n", parser->recoveryAttempts);
@@ -471,24 +576,38 @@ void panicRecovery(Parser *parser, const char *syncTokens[], int syncCount, cons
 
     parser->recoveryAttempts++;
 
-    fprintf(stderr, "\n  \e[1;33m⚠ PANIC MODE ERROR RECOVERY\e[0m\n");
+    fprintf(stderr, "\n  \e[1;33m!! PANIC MODE ERROR RECOVERY\e[0m\n");
     fprintf(stderr, "  Context: %s\n", context);
     fprintf(stderr, "  Skipping tokens until a synchronization point is found...\n");
 
     fprintf(parser->output, "\n  --- PANIC MODE RECOVERY [%s] ---\n", context);
     fprintf(parser->output, "  Skipping tokens until synchronization point...\n");
 
-    // Prompt the user for recovery action
-    fprintf(stderr, "\n  \e[1;36mRecovery Options:\e[0m\n");
-    fprintf(stderr, "  [C] Continue — Skip to next sync token and continue parsing\n");
-    fprintf(stderr, "  [S] Skip statement — Discard current statement and continue\n");
-    fprintf(stderr, "  [A] Abort — Stop parsing entirely\n");
-    fprintf(stderr, "  \e[1;36mChoose [C/S/A]:\e[0m ");
+    int userChoice = parser->defaultRecoveryChoice;
 
-    int userChoice = fgetc(stdin);
-    // Consume the rest of the line
-    int ch;
-    while ((ch = fgetc(stdin)) != '\n' && ch != EOF);
+    if (userChoice != 0) {
+        fprintf(stderr, "  \e[1;36mUsing default recovery option: [%c]\e[0m\n", userChoice);
+    } else {
+        // Prompt the user for recovery action
+        fprintf(stderr, "\n  \e[1;36mRecovery Options:\e[0m\n");
+        fprintf(stderr, "  [C] Continue - Skip to next sync token and continue parsing\n");
+        fprintf(stderr, "  [S] Skip statement - Discard current statement and continue\n");
+        fprintf(stderr, "  [A] Abort - Stop parsing entirely\n");
+        fprintf(stderr, "  Uppercase choice sets the default; lowercase choice applies once\n");
+        fprintf(stderr, "  \e[1;36mChoose [C/S/A]:\e[0m ");
+
+        userChoice = fgetc(stdin);
+        // Consume the rest of the line
+        int ch;
+        while ((ch = fgetc(stdin)) != '\n' && ch != EOF);
+
+        if (isupper((unsigned char)userChoice)) {
+            if (userChoice == 'C' || userChoice == 'S' || userChoice == 'A') {
+                parser->defaultRecoveryChoice = (char)userChoice;
+                fprintf(stderr, "  \e[1;32m%c saved as the default recovery option.\e[0m\n", userChoice);
+            }
+        }
+    }
 
     if (userChoice == 'A' || userChoice == 'a') {
         fprintf(stderr, "  \e[1;31mParsing aborted by user.\e[0m\n");
@@ -525,11 +644,11 @@ void panicRecovery(Parser *parser, const char *syncTokens[], int syncCount, cons
     }
 
     if (tokensSkipped > 0) {
-        fprintf(stderr, "  \e[1;33mRecovery complete — %d token(s) skipped.\e[0m\n", tokensSkipped);
+        fprintf(stderr, "  \e[1;33mRecovery complete - %d token(s) skipped.\e[0m\n", tokensSkipped);
     } else {
-        fprintf(stderr, "  \e[1;33mRecovery complete — no tokens needed skipping.\e[0m\n");
+        fprintf(stderr, "  \e[1;33mRecovery complete - no tokens needed skipping.\e[0m\n");
     }
-    fprintf(parser->output, "  Recovery complete — %d token(s) skipped.\n", tokensSkipped);
+    fprintf(parser->output, "  Recovery complete - %d token(s) skipped.\n", tokensSkipped);
 }
 
 // ============================================================================
@@ -581,40 +700,42 @@ bool parseProgram(Parser *parser) {
 // Simple statements must be followed by a semicolon.
 // ============================================================================
 bool parseStatement(Parser *parser) {
-    if (parser == NULL || !parser->hasMoreTokens) return false;
+    GUARD(parser);
 
-    fprintf(parser->output, "  ── STATEMENT ─────────────────────────────────────────────────\n");
+    // Empty statement: just consume the single ';' and finish
+    if (OPT("SEMICOLON")) return true;
 
-    // Check if this is a block statement (if, loop, for, match, ensure, state, react, fn)
-    const char *blockStmtTypes[] = {
-        "IF", "LOOP", "FOR", "MATCH", "ENSURE", "STATE", "REACT", "FN"
-    };
-
-    if (checkTokenAny(parser, blockStmtTypes, 8)) {
-        bool result = parseBlockStatement(parser);
-        fprintf(parser->output, "  ── END STATEMENT ─────────────────────────────────────────────\n");
-        return result;
+    if (CHECK_ANY("IF", "LOOP", "FOR", "MATCH", "ENSURE", "STATE", "REACT", "FN")) {
+        return parseBlockStatement(parser);
     }
 
-    // Otherwise, it's a simple statement followed by a semicolon
-    if (parseSimpleStatement(parser)) {
-        // Expect a semicolon after the simple statement
-        if (checkToken(parser, "SEMICOLON")) {
-            advanceToken(parser);
-            fprintf(parser->output, "  ── END STATEMENT ─────────────────────────────────────────────\n");
-            return true;
-        } else {
-            reportError(parser, "Expected ';' after statement. "
-                               "Every simple statement must end with a semicolon. "
-                               "Add a ';' at the end of this line.");
-            const char *sync[] = {"SEMICOLON", "RBRACE", "EOF"};
-            panicRecovery(parser, sync, 3, "statement termination");
-            return false;
+    // Correctly distinguish between a variable declaration and an ensure statement
+    if (isTypeStart(parser)) {
+        REQUIRE(parseType(parser));
+        EXPECT_LOG("IDENTIFIER", "Variable", "Expected a variable name after type.");
+        OPT_NOISE("is");
+        EXPECT("ASSIGNMENT", "Expected '=' in declaration.");
+
+        if (OPT("ENSURE")) {
+            // EnsureStmt — ends with Block (no ';' needed)
+            REQUIRE(parseExpression(parser));
+            EXPECT("ELSE", "Expected 'else' in ensure statement.");
+            return parseBlock(parser);
         }
+
+        // Normal VarDecl — ends with ';'
+        REQUIRE(parseExpression(parser));
+        EXPECT_SYNC("SEMICOLON", "Expected ';' after variable declaration.",
+                    "declaration termination", "SEMICOLON", "RBRACE", "EOF");
+        return true;
     }
 
-    fprintf(parser->output, "  ── END STATEMENT ─────────────────────────────────────────────\n");
-    return false;
+    REQUIRE(parseSimpleStatement(parser));
+    EXPECT_SYNC("SEMICOLON",
+                "Expected ';' after statement.",
+                "statement termination",
+                "SEMICOLON", "RBRACE", "EOF");
+    return true;
 }
 
 // ============================================================================
@@ -623,29 +744,34 @@ bool parseStatement(Parser *parser) {
 // BlockStatement = IfStmt | LoopStmt | ForStmt | MatchStmt | EnsureStmt
 //                 | StateDecl | ReactDecl | FnDecl ;
 // ============================================================================
-bool parseBlockStatement(Parser *parser) {
-    if (parser == NULL || !parser->hasMoreTokens) return false;
+typedef bool (*ParseFn)(Parser *);
 
-    if (checkToken(parser, "IF")) {
-        return parseIfStmt(parser);
-    } else if (checkToken(parser, "LOOP")) {
-        return parseLoopStmt(parser);
-    } else if (checkToken(parser, "FOR")) {
-        return parseForStmt(parser);
-    } else if (checkToken(parser, "MATCH")) {
-        return parseMatchStmt(parser);
-    } else if (checkToken(parser, "ENSURE")) {
-        return parseEnsureStmt(parser);
-    } else if (checkToken(parser, "STATE")) {
-        return parseStateDecl(parser);
-    } else if (checkToken(parser, "REACT")) {
-        return parseReactDecl(parser);
-    } else if (checkToken(parser, "FN")) {
-        return parseFnDecl(parser);
+typedef struct {
+    const char *token;
+    ParseFn fn;
+} TokenRule;
+
+static ParseFn lookupRule(Parser *parser, const TokenRule *rules, size_t count) {
+    for (size_t i = 0; i < count; i++) {
+        if (checkToken(parser, rules[i].token)) return rules[i].fn;
     }
+    return NULL;
+}
 
-    reportError(parser, "Expected a block statement keyword (if, loop, for, match, "
-                        "ensure, state, react, or fn). Check the spelling of the keyword.");
+// BlockStatement = IfStmt | LoopStmt | ForStmt | MatchStmt | EnsureStmt | StateDecl | ReactDecl | FnDecl ;
+bool parseBlockStatement(Parser *parser) {
+    GUARD(parser);
+    static const TokenRule rules[] = {
+        {"IF", parseIfStmt},         {"LOOP", parseLoopStmt},
+        {"FOR", parseForStmt},       {"MATCH", parseMatchStmt},
+        {"ENSURE", parseEnsureStmt}, {"STATE", parseStateDecl},
+        {"REACT", parseReactDecl},   {"FN", parseFnDecl},
+    };
+
+    ParseFn fn = lookupRule(parser, rules, sizeof(rules) / sizeof(rules[0]));
+    if (fn != NULL) return fn(parser);
+
+    reportError(parser, "Expected a block statement keyword (if, loop, for, match, ensure, state, react, or fn).");
     return false;
 }
 
@@ -706,13 +832,7 @@ bool parseSimpleStatement(Parser *parser) {
         return parseAssignment(parser);
     }
 
-    // Empty statement (just a semicolon)
-    if (checkToken(parser, "SEMICOLON")) {
-        advanceToken(parser);
-        return true;
-    }
-
-    // Noise word (like "do", "is", "to") — skip it silently
+    // Noise word (like "do", "is", "to") - skip it silently
     if (checkToken(parser, "NOISE_WORD")) {
         advanceToken(parser);
         return true;
@@ -747,16 +867,13 @@ bool parseSimpleStatement(Parser *parser) {
 //   3. int x = a + b * 2;    (expression assignment)
 // ============================================================================
 bool parseVarDecl(Parser *parser) {
-    if (parser == NULL || !parser->hasMoreTokens) return false;
+    GUARD(parser);
 
     fprintf(parser->output, "    ── VARIABLE DECLARATION ─────────────────────────────────────\n");
 
     // Parse the type
-    if (!parseType(parser)) {
-        reportError(parser, "Invalid type in variable declaration. "
-                            "Valid types: int, float, string, bool, char, or array types like [int].");
-        return false;
-    }
+    REQUIRE_MSG(parseType(parser), "Invalid type in variable declaration. "
+                                    "Valid types: int, float, string, bool, char, or array types like [int].");
 
     // Parse the identifier (variable name)
     if (!checkToken(parser, "IDENTIFIER")) {
@@ -769,11 +886,7 @@ bool parseVarDecl(Parser *parser) {
     fprintf(parser->output, "    Variable: %s\n", parser->currentToken.lexeme);
     advanceToken(parser);
 
-    // Optional "is" noise word
-    if (checkToken(parser, "NOISE_WORD") &&
-        strcasecmp(parser->currentToken.lexeme, "is") == 0) {
-        advanceToken(parser);
-    }
+    matchNoise(parser, "is");
 
     // Expect '='
     if (!checkToken(parser, "ASSIGNMENT") &&
@@ -880,44 +993,28 @@ bool parseAssignment(Parser *parser) {
 // PrintStmt = "print", "(", Expression, ")" ;
 //
 // Handles all 3 forms:
-//   1. print("Hello, World!");         — Printing a string literal
-//   2. print(myVariable);              — Printing a variable
-//   3. print("Value: " + result);      — Printing concatenation (string + variable)
+//   1. print("Hello, World!");         - Printing a string literal
+//   2. print(myVariable);              - Printing a variable
+//   3. print("Value: " + result);      - Printing concatenation (string + variable)
 // ============================================================================
 bool parsePrintStmt(Parser *parser) {
-    if (parser == NULL || !parser->hasMoreTokens) return false;
+    GUARD(parser);
 
     fprintf(parser->output, "    ── PRINT STATEMENT ───────────────────────────────────────────\n");
 
     // Consume 'print'
-    if (!matchToken(parser, "PRINT")) {
-        reportError(parser, "Expected 'print' keyword. Use 'print(expression);' to output values.");
-        return false;
-    }
-
-    // Expect '('
-    if (!matchToken(parser, "LPAREN")) {
-        reportError(parser, "Expected '(' after 'print'. Syntax: print(expression);");
-        return false;
-    }
+    EXPECT("PRINT", "Expected 'print' keyword. Use 'print(expression);' to output values.");
+    EXPECT("LPAREN", "Expected '(' after 'print'. Syntax: print(expression);");
 
     // Parse the expression inside print()
     // This handles all 3 output forms:
     //   1. String literal: print("hello");
     //   2. Variable:       print(x);
     //   3. Concatenation:  print("Value: " + x);
-    if (!parseExpression(parser)) {
-        reportError(parser, "Expected an expression inside print(). "
-                            "Provide a string, variable, or concatenation to output.");
-        return false;
-    }
-
-    // Expect ')'
-    if (!matchToken(parser, "RPAREN")) {
-        reportError(parser, "Expected ')' to close the print() call. "
-                            "Syntax: print(expression);");
-        return false;
-    }
+    REQUIRE_MSG(parseExpression(parser), "Expected an expression inside print(). "
+                                         "Provide a string, variable, or concatenation to output.");
+    EXPECT("RPAREN", "Expected ')' to close the print() call. "
+                     "Syntax: print(expression);");
 
     // Classify the print statement for the trace
     // We check what was inside the parentheses by looking at what we parsed
@@ -938,69 +1035,20 @@ bool parsePrintStmt(Parser *parser) {
 //   4. if (condition) { block } else if (condition) { block } else { block }
 // ============================================================================
 bool parseIfStmt(Parser *parser) {
-    if (parser == NULL || !parser->hasMoreTokens) return false;
+    GUARD(parser);
 
     fprintf(parser->output, "    ── IF STATEMENT ──────────────────────────────────────────────\n");
 
-    // Consume 'if'
-    if (!matchToken(parser, "IF")) {
-        reportError(parser, "Expected 'if' keyword. Syntax: if (condition) { ... }");
-        return false;
-    }
+    EXPECT("IF",     "Expected 'if' keyword. Syntax: if (condition) { ... }");
+    EXPECT("LPAREN", "Expected '(' after 'if'. Syntax: if (condition) { ... }");
+    REQUIRE(parseExpression(parser));
+    EXPECT("RPAREN", "Expected ')' after if condition. Syntax: if (condition) { ... }");
 
-    // Expect '('
-    if (!matchToken(parser, "LPAREN")) {
-        reportError(parser, "Expected '(' after 'if'. Syntax: if (condition) { ... }");
-        return false;
-    }
+    REQUIRE(parseBlockOrStmt(parser));
 
-    // Parse the condition expression
-    if (!parseExpression(parser)) {
-        reportError(parser, "Expected a condition expression inside 'if(...)'. "
-                            "The condition should evaluate to a boolean value.");
-        return false;
-    }
-
-    // Expect ')'
-    if (!matchToken(parser, "RPAREN")) {
-        reportError(parser, "Expected ')' after if condition. Syntax: if (condition) { ... }");
-        return false;
-    }
-
-    // Parse the then-branch (statement or block)
-    if (checkToken(parser, "LBRACE")) {
-        if (!parseBlock(parser)) {
-            reportError(parser, "Expected a block '{ ... }' after if condition.");
-            return false;
-        }
-    } else {
-        if (!parseStatement(parser)) {
-            reportError(parser, "Expected a statement after if condition.");
-            return false;
-        }
-    }
-
-    // Optional 'else' branch
-    if (checkToken(parser, "ELSE")) {
+    if (OPT("ELSE")) {
         fprintf(parser->output, "    ── ELSE BRANCH ──────────────────────────────────────────────\n");
-        advanceToken(parser); // consume 'else'
-
-        // Handle "else if" — parse as a new if statement
-        if (checkToken(parser, "IF")) {
-            if (!parseIfStmt(parser)) {
-                return false;
-            }
-        } else if (checkToken(parser, "LBRACE")) {
-            if (!parseBlock(parser)) {
-                reportError(parser, "Expected a block '{ ... }' after else.");
-                return false;
-            }
-        } else {
-            if (!parseStatement(parser)) {
-                reportError(parser, "Expected a statement or block after else.");
-                return false;
-            }
-        }
+        REQUIRE(checkToken(parser, "IF") ? parseIfStmt(parser) : parseBlockOrStmt(parser));
     }
 
     fprintf(parser->output, "    ── END IF STATEMENT ───────────────────────────────────────────\n");
@@ -1017,32 +1065,14 @@ bool parseIfStmt(Parser *parser) {
 // An infinite loop that repeats the block until a break/transition/return.
 // --------------------------------------------------------------------------
 bool parseLoopStmt(Parser *parser) {
-    if (parser == NULL || !parser->hasMoreTokens) return false;
+    GUARD(parser);
 
     fprintf(parser->output, "    ── LOOP STATEMENT ────────────────────────────────────────────\n");
 
-    // Consume 'loop'
-    if (!matchToken(parser, "LOOP")) {
-        reportError(parser, "Expected 'loop' keyword. Syntax: loop { ... }");
-        return false;
-    }
-
-    // Optional "do" noise word
-    if (checkToken(parser, "NOISE_WORD") &&
-        strcasecmp(parser->currentToken.lexeme, "do") == 0) {
-        advanceToken(parser);
-    }
-
-    // Parse the loop body (must be a block)
-    if (!checkToken(parser, "LBRACE")) {
-        reportError(parser, "Expected '{' after 'loop'. The loop body must be a block: loop { ... }");
-        return false;
-    }
-
-    if (!parseBlock(parser)) {
-        reportError(parser, "Expected a valid block '{ ... }' for the loop body.");
-        return false;
-    }
+    EXPECT("LOOP", "Expected 'loop' keyword. Syntax: loop { ... }");
+    matchNoise(parser, "do");
+    REQUIRE_MSG(parseBlock(parser),
+                "Expected '{' after 'loop'. The loop body must be a block: loop { ... }");
 
     fprintf(parser->output, "    ── END LOOP STATEMENT ─────────────────────────────────────────\n");
     return true;
@@ -1055,108 +1085,47 @@ bool parseLoopStmt(Parser *parser) {
 //
 // A C-style for loop with initialization, condition, and increment.
 // --------------------------------------------------------------------------
+// ForStmt = "for", "(", Type, Identifier, "=", Expression, ";",
+//           Expression, ";", Assignment, ")", [ "do" ], Block ;
 bool parseForStmt(Parser *parser) {
-    if (parser == NULL || !parser->hasMoreTokens) return false;
+    GUARD(parser);
 
     fprintf(parser->output, "    ── FOR STATEMENT ─────────────────────────────────────────────\n");
 
-    // Consume 'for'
-    if (!matchToken(parser, "FOR")) {
-        reportError(parser, "Expected 'for' keyword. Syntax: for (type var = init; condition; increment) { ... }");
-        return false;
-    }
+    EXPECT("FOR",    "Expected 'for' keyword. Syntax: for (type var = init; condition; increment) { ... }");
+    EXPECT("LPAREN", "Expected '(' after 'for'. Syntax: for (type var = init; condition; increment) { ... }");
 
-    // Expect '('
-    if (!matchToken(parser, "LPAREN")) {
-        reportError(parser, "Expected '(' after 'for'. Syntax: for (type var = init; condition; increment) { ... }");
-        return false;
-    }
+    REQUIRE(parseType(parser));
 
-    // Parse initialization: Type Identifier = Expression
-    if (!parseType(parser)) {
-        reportError(parser, "Expected a type (int, float, string, bool, char) in for loop initialization.");
-        return false;
-    }
+    EXPECT_SYNC("IDENTIFIER",
+                "Expected a loop variable name after the type in for loop initialization.",
+                "for loop variable",
+                "SEMICOLON", "RPAREN", "RBRACE", "EOF");
 
-    if (!checkToken(parser, "IDENTIFIER")) {
-        reportError(parser, "Expected a loop variable name after the type in for loop initialization.");
-        const char *sync[] = {"SEMICOLON", "RPAREN", "RBRACE", "EOF"};
-        panicRecovery(parser, sync, 4, "for loop variable");
-        return false;
-    }
-    fprintf(parser->output, "    Loop variable: %s\n", parser->currentToken.lexeme);
-    advanceToken(parser);
+    EXPECT_SYNC("ASSIGNMENT",
+                "Expected '=' after the loop variable in for loop initialization.",
+                "for loop assignment",
+                "SEMICOLON", "RPAREN", "RBRACE", "EOF");
 
-    if (!checkToken(parser, "ASSIGNMENT") && !checkToken(parser, "ASSIGN")) {
-        reportError(parser, "Expected '=' in for loop initialization. Syntax: for (type var = init; ...)");
-        const char *sync[] = {"SEMICOLON", "RPAREN", "RBRACE", "EOF"};
-        panicRecovery(parser, sync, 4, "for loop assignment");
-        return false;
-    }
-    advanceToken(parser); // consume '='
+    REQUIRE(parseExpression(parser));
 
-    if (!parseExpression(parser)) {
-        reportError(parser, "Expected an initialization expression in for loop.");
-        return false;
-    }
+    EXPECT_SYNC("SEMICOLON",
+                "Expected ';' after for loop initialization.",
+                "for loop semicolon",
+                "SEMICOLON", "RPAREN", "RBRACE", "EOF");
 
-    // Expect ';'
-    if (!matchToken(parser, "SEMICOLON")) {
-        reportError(parser, "Expected ';' after for loop initialization. "
-                            "Syntax: for (type var = init; condition; increment)");
-        const char *sync[] = {"SEMICOLON", "RPAREN", "RBRACE", "EOF"};
-        panicRecovery(parser, sync, 4, "for loop semicolon");
-        return false;
-    }
+    REQUIRE(parseExpression(parser));
 
-    // Parse condition expression
-    if (!parseExpression(parser)) {
-        reportError(parser, "Expected a condition expression in for loop.");
-        return false;
-    }
+    EXPECT_SYNC("SEMICOLON",
+                "Expected ';' after for loop condition.",
+                "for loop semicolon",
+                "RPAREN", "RBRACE", "EOF");
 
-    // Expect ';'
-    if (!matchToken(parser, "SEMICOLON")) {
-        reportError(parser, "Expected ';' after for loop condition. "
-                            "Syntax: for (type var = init; condition; increment)");
-        const char *sync[] = {"RPAREN", "RBRACE", "EOF"};
-        panicRecovery(parser, sync, 3, "for loop semicolon");
-        return false;
-    }
+    REQUIRE(parseAssignment(parser));
 
-    // Parse increment (an assignment or expression)
-    if (!parseAssignment(parser)) {
-        // If it's not an assignment, try parsing as an expression
-        if (!parseExpression(parser)) {
-            reportError(parser, "Expected an increment expression in for loop. "
-                                "Example: i += 1 or i = i + 1");
-            return false;
-        }
-    }
-
-    // Expect ')'
-    if (!matchToken(parser, "RPAREN")) {
-        reportError(parser, "Expected ')' after for loop header. "
-                            "Syntax: for (type var = init; condition; increment) { ... }");
-        return false;
-    }
-
-    // Optional "do" noise word
-    if (checkToken(parser, "NOISE_WORD") &&
-        strcasecmp(parser->currentToken.lexeme, "do") == 0) {
-        advanceToken(parser);
-    }
-
-    // Parse the loop body (block)
-    if (!checkToken(parser, "LBRACE")) {
-        reportError(parser, "Expected '{' for the for loop body. Syntax: for (...) { ... }");
-        return false;
-    }
-
-    if (!parseBlock(parser)) {
-        reportError(parser, "Expected a valid block '{ ... }' for the for loop body.");
-        return false;
-    }
+    EXPECT("RPAREN", "Expected ')' after for loop header.");
+    OPT_NOISE("do");
+    REQUIRE(parseBlock(parser));
 
     fprintf(parser->output, "    ── END FOR STATEMENT ──────────────────────────────────────────\n");
     return true;
@@ -1168,107 +1137,60 @@ bool parseForStmt(Parser *parser) {
 // MatchStmt = "match", Identifier, ["do"], "{", { MatchCase }, "}" ;
 // MatchCase = ( StringLiteral | "_" ), "->", ( Block | SimpleStatement, ";" ) ;
 // ============================================================================
+// MatchStmt = "match", ( "(", Expression, ")" | Identifier ), [ "do" ], "{", { MatchCase }, "}" ;
+// MatchCase = Pattern, "->", ( Block | SimpleStatement, ";" ) ;
 bool parseMatchStmt(Parser *parser) {
-    if (parser == NULL || !parser->hasMoreTokens) return false;
+    GUARD(parser);
 
     fprintf(parser->output, "    ── MATCH STATEMENT ───────────────────────────────────────────\n");
 
-    if (!matchToken(parser, "MATCH")) {
-        reportError(parser, "Expected 'match' keyword. Syntax: match (expression) { ... }");
-        return false;
-    }
+    EXPECT("MATCH", "Expected 'match' keyword. Syntax: match (expression) { case -> action; }");
 
-    // Parse the match subject (identifier or expression)
-    if (!checkToken(parser, "IDENTIFIER") && !checkToken(parser, "LPAREN")) {
-        reportError(parser, "Expected an identifier or '(' after 'match'. "
-                            "Syntax: match expression { case -> action; }");
-        return false;
-    }
-
-    if (checkToken(parser, "LPAREN")) {
-        advanceToken(parser); // consume '('
-        parseExpression(parser);
-        if (!matchToken(parser, "RPAREN")) {
-            reportError(parser, "Expected ')' after match expression.");
-            return false;
-        }
+    if (OPT("LPAREN")) {
+        REQUIRE(parseExpression(parser));
+        EXPECT("RPAREN", "Expected ')' after match expression.");
     } else {
-        advanceToken(parser); // consume identifier
+        EXPECT_LOG("IDENTIFIER", "Match subject", "Expected an identifier or '(' after 'match'.");
     }
 
-    // Optional "do" noise word
-    if (checkToken(parser, "NOISE_WORD") &&
-        strcasecmp(parser->currentToken.lexeme, "do") == 0) {
-        advanceToken(parser);
-    }
+    OPT_NOISE("do");
+    EXPECT("LBRACE", "Expected '{' to start match cases. Syntax: match expr { case -> action; }");
 
-    // Expect '{'
-    if (!matchToken(parser, "LBRACE")) {
-        reportError(parser, "Expected '{' to start match cases. Syntax: match expr { case -> action; }");
-        return false;
-    }
-
-    // Parse match cases
     int caseCount = 0;
-    while (parser->hasMoreTokens && !checkToken(parser, "RBRACE") && !checkToken(parser, "EOF")) {
-        // Each case starts with a string literal, identifier, or '_'
-        if (checkToken(parser, "STRING_LITERAL") ||
-            checkToken(parser, "IDENTIFIER") ||
-            checkToken(parser, "INT_LITERAL") ||
-            checkToken(parser, "FLOAT_LITERAL") ||
-            checkToken(parser, "CHAR_LITERAL") ||
-            checkToken(parser, "TRUE") ||
-            checkToken(parser, "FALSE") ||
-            checkToken(parser, "NULL") ||
-            (checkToken(parser, "SUBTRACTION") && parser->currentToken.lexeme[0] == '-') ||
-            (checkToken(parser, "ADDITION") && parser->currentToken.lexeme[0] == '+')) {
-
-            caseCount++;
-            fprintf(parser->output, "      Case %d: %s\n", caseCount, parser->currentToken.lexeme);
-            advanceToken(parser); // consume the case pattern
-
-            // Expect '->'
-            if (!matchToken(parser, "ARROW")) {
-                reportError(parser, "Expected '->' after match case pattern. "
-                                    "Syntax: pattern -> action;");
-                const char *sync[] = {"ARROW", "RBRACE", "SEMICOLON", "EOF"};
-                panicRecovery(parser, sync, 4, "match case arrow");
-                continue;
+    while (parser->hasMoreTokens && !CHECK_ANY("RBRACE", "EOF")) {
+        if (CHECK_ANY("SUBTRACTION", "ADDITION")) {
+            char sign = parser->currentToken.lexeme[0];
+            advanceToken(parser);
+            if (!CHECK_ANY("INT_LITERAL", "FLOAT_LITERAL")) {
+                reportError(parser, "Expected a number after '+' or '-' in match case.");
+                return false;
             }
-
-            // Parse the case action (block or simple statement)
-            if (checkToken(parser, "LBRACE")) {
-                parseBlock(parser);
-            } else {
-                parseSimpleStatement(parser);
-                if (checkToken(parser, "SEMICOLON")) {
-                    advanceToken(parser);
-                }
-            }
-        } else if (checkToken(parser, "NOISE_WORD") &&
-                   strcasecmp(parser->currentToken.lexeme, "_") == 0) {
-            // Wildcard case: _ -> action;
-            caseCount++;
-            fprintf(parser->output, "      Case %d: _ (default)\n", caseCount);
-            advanceToken(parser); // consume '_'
-
-            if (!matchToken(parser, "ARROW")) {
-                reportError(parser, "Expected '->' after '_' in default match case.");
-                const char *sync[] = {"ARROW", "RBRACE", "SEMICOLON", "EOF"};
-                panicRecovery(parser, sync, 4, "match case arrow");
-                continue;
-            }
-
-            if (checkToken(parser, "LBRACE")) {
-                parseBlock(parser);
-            } else {
-                parseSimpleStatement(parser);
-                if (checkToken(parser, "SEMICOLON")) {
-                    advanceToken(parser);
-                }
-            }
+            fprintf(parser->output, "      Case %d: %c%s\n", ++caseCount, sign, parser->currentToken.lexeme);
+            advanceToken(parser);
+        } else if (CHECK_ANY("STRING_LITERAL", "IDENTIFIER", "INT_LITERAL", "FLOAT_LITERAL",
+                             "CHAR_LITERAL", "TRUE", "FALSE", "NULL")) {
+            const char *label = (strcmp(parser->currentToken.lexeme, "_") == 0)
+                                    ? "_ (default)"
+                                    : parser->currentToken.lexeme;
+            fprintf(parser->output, "      Case %d: %s\n", ++caseCount, label);
+            advanceToken(parser);
         } else {
-            break; // Unexpected token — let the caller handle it
+            break;
+        }
+
+        if (!OPT("ARROW")) {
+            reportError(parser, "Expected '->' after match case pattern. Syntax: pattern -> action;");
+            const char *sync[] = {"RBRACE", "SEMICOLON", "EOF"};
+            panicRecovery(parser, sync, 3, "match case arrow");
+            OPT("SEMICOLON");
+            continue;
+        }
+
+        if (checkToken(parser, "LBRACE")) {
+            REQUIRE(parseBlock(parser));
+        } else {
+            REQUIRE(parseSimpleStatement(parser));
+            EXPECT("SEMICOLON", "Expected ';' after match case statement.");
         }
     }
 
@@ -1277,12 +1199,7 @@ bool parseMatchStmt(Parser *parser) {
                             "Add cases like: \"value\" -> { ... } or _ -> { ... }");
     }
 
-    // Expect '}'
-    if (!matchToken(parser, "RBRACE")) {
-        reportError(parser, "Expected '}' to close match statement. "
-                            "Each match must be enclosed in braces.");
-        return false;
-    }
+    EXPECT("RBRACE", "Expected '}' to close match statement.");
 
     fprintf(parser->output, "    ── END MATCH STATEMENT ────────────────────────────────────────\n");
     return true;
@@ -1294,64 +1211,23 @@ bool parseMatchStmt(Parser *parser) {
 // EnsureStmt = Type, Identifier, ["is"], "=", "ensure", Expression, "else", Block ;
 // ============================================================================
 bool parseEnsureStmt(Parser *parser) {
-    if (parser == NULL || !parser->hasMoreTokens) return false;
+    GUARD(parser);
 
     fprintf(parser->output, "    ── ENSURE STATEMENT ──────────────────────────────────────────\n");
 
     // Parse: Type Identifier ["is"] "=" "ensure"
-    if (!parseType(parser)) {
-        reportError(parser, "Expected a type in ensure statement. "
-                            "Syntax: type var = ensure expression else { ... }");
-        return false;
-    }
-
-    if (!checkToken(parser, "IDENTIFIER")) {
-        reportError(parser, "Expected a variable name after the type in ensure statement.");
-        return false;
-    }
-    fprintf(parser->output, "    Variable: %s\n", parser->currentToken.lexeme);
-    advanceToken(parser);
-
-    // Optional "is" noise word
-    if (checkToken(parser, "NOISE_WORD") &&
-        strcasecmp(parser->currentToken.lexeme, "is") == 0) {
-        advanceToken(parser);
-    }
-
-    if (!checkToken(parser, "ASSIGNMENT") && !checkToken(parser, "ASSIGN")) {
-        reportError(parser, "Expected '=' in ensure statement. "
-                            "Syntax: type var = ensure expression else { ... }");
-        return false;
-    }
-    advanceToken(parser); // consume '='
-
-    if (!matchToken(parser, "ENSURE")) {
-        reportError(parser, "Expected 'ensure' keyword. "
-                            "Syntax: type var = ensure expression else { ... }");
-        return false;
-    }
-
-    if (!parseExpression(parser)) {
-        reportError(parser, "Expected an expression after 'ensure'. "
-                            "Syntax: type var = ensure expression else { ... }");
-        return false;
-    }
-
-    if (!matchToken(parser, "ELSE")) {
-        reportError(parser, "Expected 'else' in ensure statement. "
-                            "Syntax: type var = ensure expression else { ... }");
-        return false;
-    }
-
-    if (!checkToken(parser, "LBRACE")) {
-        reportError(parser, "Expected a block '{ ... }' after 'else' in ensure statement.");
-        return false;
-    }
-
-    if (!parseBlock(parser)) {
-        reportError(parser, "Expected a valid block after 'else' in ensure statement.");
-        return false;
-    }
+    REQUIRE_MSG(parseType(parser), "Expected a type in ensure statement. "
+                                    "Syntax: type var = ensure expression else { ... }");
+    EXPECT_LOG("IDENTIFIER", "Variable name", "Expected a variable name after the type in ensure statement.");
+    OPT_NOISE("is");
+    EXPECT("ASSIGNMENT", "Expected '=' in ensure statement. "
+                        "Syntax: type var = ensure expression else { ... }");
+    EXPECT("ENSURE", "Expected 'ensure' keyword in ensure statement. "
+                        "Syntax: type var = ensure expression else { ... }");
+    REQUIRE(parseExpression(parser));
+    EXPECT("ELSE", "Expected 'else' keyword in ensure statement. "
+                        "Syntax: type var = ensure expression else { ... }");
+    REQUIRE(parseBlock(parser));
 
     fprintf(parser->output, "    ── END ENSURE STATEMENT ───────────────────────────────────────\n");
     return true;
@@ -1363,28 +1239,14 @@ bool parseEnsureStmt(Parser *parser) {
 // TransitionStmt = "transition", ["to"], Identifier ;
 // ============================================================================
 bool parseTransitionStmt(Parser *parser) {
-    if (parser == NULL || !parser->hasMoreTokens) return false;
+    GUARD(parser);
 
     fprintf(parser->output, "    ── TRANSITION STATEMENT ──────────────────────────────────────\n");
 
-    if (!matchToken(parser, "TRANSITION")) {
-        reportError(parser, "Expected 'transition' keyword. Syntax: transition to StateName;");
-        return false;
-    }
-
-    // Optional "to" noise word
-    if (checkToken(parser, "NOISE_WORD") &&
-        strcasecmp(parser->currentToken.lexeme, "to") == 0) {
-        advanceToken(parser);
-    }
-
-    if (!checkToken(parser, "IDENTIFIER")) {
-        reportError(parser, "Expected a state name (identifier) after 'transition'. "
-                            "Syntax: transition to StateName;");
-        return false;
-    }
+    EXPECT("TRANSITION", "Expected 'transition' keyword. Syntax: transition to StateName;");
+    OPT_NOISE("to");
+    EXPECT_LOG("IDENTIFIER", "Target state", "Expected a state name after 'transition'.");
     fprintf(parser->output, "    Target state: %s\n", parser->currentToken.lexeme);
-    advanceToken(parser);
 
     fprintf(parser->output, "    ── END TRANSITION STATEMENT ───────────────────────────────────\n");
     return true;
@@ -1396,14 +1258,11 @@ bool parseTransitionStmt(Parser *parser) {
 // ReturnStmt = "return", Expression ;
 // ============================================================================
 bool parseReturnStmt(Parser *parser) {
-    if (parser == NULL || !parser->hasMoreTokens) return false;
+    GUARD(parser);
 
     fprintf(parser->output, "    ── RETURN STATEMENT ───────────────────────────────────────────\n");
 
-    if (!matchToken(parser, "RETURN")) {
-        reportError(parser, "Expected 'return' keyword. Syntax: return expression;");
-        return false;
-    }
+    EXPECT("RETURN", "Expected 'return' keyword. Syntax: return expression;");
 
     // Parse the return value expression
     if (!checkToken(parser, "SEMICOLON") && !checkToken(parser, "RBRACE") && !checkToken(parser, "EOF")) {
@@ -1424,14 +1283,11 @@ bool parseReturnStmt(Parser *parser) {
 // Block = "{", { Statement }, "}" ;
 // ============================================================================
 bool parseBlock(Parser *parser) {
-    if (parser == NULL || !parser->hasMoreTokens) return false;
+    GUARD(parser);
 
     fprintf(parser->output, "    ── BLOCK ─────────────────────────────────────────────────────\n");
 
-    if (!matchToken(parser, "LBRACE")) {
-        reportError(parser, "Expected '{' to start a block.");
-        return false;
-    }
+    EXPECT("LBRACE", "Expected '{' to start a block.");
 
     // Parse statements inside the block
     while (parser->hasMoreTokens && !checkToken(parser, "RBRACE") && !checkToken(parser, "EOF")) {
@@ -1442,11 +1298,8 @@ bool parseBlock(Parser *parser) {
         }
     }
 
-    if (!matchToken(parser, "RBRACE")) {
-        reportError(parser, "Expected '}' to close the block. "
-                            "Every opening '{' must have a matching '}'.");
-        return false;
-    }
+    EXPECT("RBRACE", "Expected '}' to close the block. "
+                     "Every opening '{' must have a matching '}'.");
 
     fprintf(parser->output, "    ── END BLOCK ──────────────────────────────────────────────────\n");
     return true;
@@ -1458,38 +1311,16 @@ bool parseBlock(Parser *parser) {
 // StateDecl = "state", Identifier, ["do"], Block ;
 // ============================================================================
 bool parseStateDecl(Parser *parser) {
-    if (parser == NULL || !parser->hasMoreTokens) return false;
+    GUARD(parser);
 
     fprintf(parser->output, "    ── STATE DECLARATION ──────────────────────────────────────────\n");
 
-    if (!matchToken(parser, "STATE")) {
-        reportError(parser, "Expected 'state' keyword. Syntax: state StateName { ... }");
-        return false;
-    }
-
-    if (!checkToken(parser, "IDENTIFIER")) {
-        reportError(parser, "Expected a state name (identifier) after 'state'. "
-                            "Syntax: state StateName { ... }");
-        return false;
-    }
+    EXPECT("STATE", "Expected 'state' keyword. Syntax: state StateName { ... }");
+    EXPECT_LOG("IDENTIFIER", "State name", "Expected a state name (identifier) after 'state'. "
+                         "Syntax: state StateName { ... }");
     fprintf(parser->output, "    State name: %s\n", parser->currentToken.lexeme);
-    advanceToken(parser);
-
-    // Optional "do" noise word
-    if (checkToken(parser, "NOISE_WORD") &&
-        strcasecmp(parser->currentToken.lexeme, "do") == 0) {
-        advanceToken(parser);
-    }
-
-    if (!checkToken(parser, "LBRACE")) {
-        reportError(parser, "Expected '{' after state name. Syntax: state StateName { ... }");
-        return false;
-    }
-
-    if (!parseBlock(parser)) {
-        reportError(parser, "Expected a valid block for the state body.");
-        return false;
-    }
+    OPT_NOISE("do");
+    REQUIRE(parseBlock(parser));
 
     fprintf(parser->output, "    ── END STATE DECLARATION ───────────────────────────────────────\n");
     return true;
@@ -1501,19 +1332,12 @@ bool parseStateDecl(Parser *parser) {
 // ReactDecl = "react", "(", Identifier, ")", ["do"], Block ;
 // ============================================================================
 bool parseReactDecl(Parser *parser) {
-    if (parser == NULL || !parser->hasMoreTokens) return false;
+    GUARD(parser);
 
     fprintf(parser->output, "    ── REACT DECLARATION ──────────────────────────────────────────\n");
 
-    if (!matchToken(parser, "REACT")) {
-        reportError(parser, "Expected 'react' keyword. Syntax: react (variable) { ... }");
-        return false;
-    }
-
-    if (!matchToken(parser, "LPAREN")) {
-        reportError(parser, "Expected '(' after 'react'. Syntax: react (variable) { ... }");
-        return false;
-    }
+    EXPECT("REACT", "Expected 'react' keyword. Syntax: react (variable) { ... }");
+    EXPECT("LPAREN", "Expected '(' after 'react'. Syntax: react (variable) { ... }");
 
     if (!checkToken(parser, "IDENTIFIER")) {
         reportError(parser, "Expected a variable name inside react(). "
@@ -1529,21 +1353,9 @@ bool parseReactDecl(Parser *parser) {
         return false;
     }
 
-    // Optional "do" noise word
-    if (checkToken(parser, "NOISE_WORD") &&
-        strcasecmp(parser->currentToken.lexeme, "do") == 0) {
-        advanceToken(parser);
-    }
-
-    if (!checkToken(parser, "LBRACE")) {
-        reportError(parser, "Expected '{' for react body. Syntax: react (var) { ... }");
-        return false;
-    }
-
-    if (!parseBlock(parser)) {
-        reportError(parser, "Expected a valid block for the react body.");
-        return false;
-    }
+    matchNoise(parser, "do");
+    REQUIRE_MSG(parseBlock(parser),
+                "Expected '{' for react body. Syntax: react (var) { ... }");
 
     fprintf(parser->output, "    ── END REACT DECLARATION ───────────────────────────────────────\n");
     return true;
@@ -1555,71 +1367,21 @@ bool parseReactDecl(Parser *parser) {
 // FnDecl = "fn", Identifier, "(", [ParamList], ")", ":", Type, ["do"], Block ;
 // ============================================================================
 bool parseFnDecl(Parser *parser) {
-    if (parser == NULL || !parser->hasMoreTokens) return false;
+    GUARD(parser);
+    fprintf(parser->output, "    ── FUNCTION DECLARATION ──\n");
 
-    fprintf(parser->output, "    ── FUNCTION DECLARATION ───────────────────────────────────────\n");
-
-    if (!matchToken(parser, "FN")) {
-        reportError(parser, "Expected 'fn' keyword. Syntax: fn functionName(params) : returnType { ... }");
-        return false;
-    }
-
-    if (!checkToken(parser, "IDENTIFIER")) {
-        reportError(parser, "Expected a function name after 'fn'. "
-                            "Syntax: fn functionName(params) : returnType { ... }");
-        return false;
-    }
-    fprintf(parser->output, "    Function name: %s\n", parser->currentToken.lexeme);
-    advanceToken(parser);
-
-    if (!matchToken(parser, "LPAREN")) {
-        reportError(parser, "Expected '(' after function name. "
-                            "Syntax: fn name(params) : returnType { ... }");
-        return false;
-    }
-
-    // Optional parameter list
+    EXPECT("FN",         "Expected 'fn' keyword.");
+    EXPECT("IDENTIFIER", "Expected a function name after 'fn'.");
+    EXPECT("LPAREN",     "Expected '(' after function name.");
     if (!checkToken(parser, "RPAREN")) {
-        parseParamList(parser);
+        REQUIRE(parseParamList(parser));
     }
+    EXPECT("RPAREN",     "Expected ')' after function parameters.");
+    EXPECT("COLON",      "Expected ':' before return type.");
+    REQUIRE_MSG(parseType(parser), "Expected a return type after ':'.");
+    matchNoise(parser, "do");
+    REQUIRE(parseBlock(parser));
 
-    if (!matchToken(parser, "RPAREN")) {
-        reportError(parser, "Expected ')' after function parameters.");
-        return false;
-    }
-
-    // Expect ':' before return type
-    if (!matchToken(parser, "COLON")) {
-        reportError(parser, "Expected ':' before return type. "
-                            "Syntax: fn name(params) : returnType { ... }");
-        return false;
-    }
-
-    // Parse return type
-    if (!parseType(parser)) {
-        reportError(parser, "Expected a return type after ':'. "
-                            "Valid types: int, float, string, bool, char.");
-        return false;
-    }
-
-    // Optional "do" noise word
-    if (checkToken(parser, "NOISE_WORD") &&
-        strcasecmp(parser->currentToken.lexeme, "do") == 0) {
-        advanceToken(parser);
-    }
-
-    if (!checkToken(parser, "LBRACE")) {
-        reportError(parser, "Expected '{' for function body. "
-                            "Syntax: fn name(params) : type { ... }");
-        return false;
-    }
-
-    if (!parseBlock(parser)) {
-        reportError(parser, "Expected a valid block for the function body.");
-        return false;
-    }
-
-    fprintf(parser->output, "    ── END FUNCTION DECLARATION ────────────────────────────────────\n");
     return true;
 }
 
@@ -1629,34 +1391,24 @@ bool parseFnDecl(Parser *parser) {
 // ParamList = Type, Identifier, { ",", Type, Identifier } ;
 // ============================================================================
 bool parseParamList(Parser *parser) {
-    if (parser == NULL || !parser->hasMoreTokens) return false;
-
+    GUARD(parser);
     fprintf(parser->output, "      Parameters:\n");
 
     int paramCount = 0;
-    do {
-        if (paramCount > 0) {
-            if (!matchToken(parser, "COMMA")) {
-                reportError(parser, "Expected ',' between parameters.");
-                return false;
-            }
-        }
-
-        if (!parseType(parser)) {
-            reportError(parser, "Expected a parameter type.");
-            return false;
-        }
-
+    while (true) {
+        REQUIRE_MSG(parseType(parser), "Expected a parameter type.");
         if (!checkToken(parser, "IDENTIFIER")) {
             reportError(parser, "Expected a parameter name after type.");
             return false;
         }
         paramCount++;
-        fprintf(parser->output, "        Param %d: %s %s\n",
-                paramCount, parser->currentToken.type, parser->currentToken.lexeme);
+        char paramName[256];
+        strncpy(paramName, parser->currentToken.lexeme, sizeof(paramName) - 1);
+        paramName[sizeof(paramName) - 1] = '\0';
         advanceToken(parser);
-
-    } while (checkToken(parser, "COMMA") && parser->hasMoreTokens);
+        fprintf(parser->output, "        Param %d: %s\n", paramCount, paramName);
+        if (!matchToken(parser, "COMMA")) break;
+    }
 
     return true;
 }
@@ -1667,24 +1419,13 @@ bool parseParamList(Parser *parser) {
 // ArgList = Expression, { ",", Expression } ;
 // ============================================================================
 bool parseArgList(Parser *parser) {
-    if (parser == NULL || !parser->hasMoreTokens) return false;
-
+    GUARD(parser);
     int argCount = 0;
-    do {
-        if (argCount > 0) {
-            if (!matchToken(parser, "COMMA")) {
-                reportError(parser, "Expected ',' between arguments.");
-                return false;
-            }
-        }
-
-        if (!parseExpression(parser)) {
-            reportError(parser, "Expected an expression as argument.");
-            return false;
-        }
+    while (true) {
+        REQUIRE_MSG(parseExpression(parser), "Expected an expression as argument.");
         argCount++;
-
-    } while (checkToken(parser, "COMMA") && parser->hasMoreTokens);
+        if (!matchToken(parser, "COMMA")) break;
+    }
 
     fprintf(parser->output, "      Arguments: %d\n", argCount);
     return true;
@@ -1698,37 +1439,30 @@ bool parseArgList(Parser *parser) {
 //      | "[", Type, "]", ["?"] ;
 // ============================================================================
 bool parseType(Parser *parser) {
-    if (parser == NULL || !parser->hasMoreTokens) return false;
+    GUARD(parser);
 
     // Check for array type: '[' Type ']'
     if (checkToken(parser, "LBRACKET")) {
         advanceToken(parser); // consume '['
-        if (!parseType(parser)) {
-            reportError(parser, "Expected a type inside '[...]'. Example: [int], [string]");
-            return false;
-        }
-        if (!matchToken(parser, "RBRACKET")) {
-            reportError(parser, "Expected ']' to close array type.");
-            return false;
-        }
+        REQUIRE_MSG(parseType(parser), "Expected a type inside '[...]'. Example: [int], [string]");
+        EXPECT("RBRACKET", "Expected ']' to close array type.");
         // Optional '?' for nullable array type
-        if (checkToken(parser, "QUESTION")) {
-            advanceToken(parser);
-        }
+        matchToken(parser, "QUESTION");
         return true;
     }
 
     // Check for primitive types
-    const char *types[] = {"INT", "FLOAT", "STRING", "BOOL", "CHAR"};
-    if (checkTokenAny(parser, types, 5)) {
+    if (isTypeStart(parser)) {
+        static const char *types[] = {"INT", "FLOAT", "STRING", "BOOL", "CHAR"};
+        if (!checkTokenAny(parser, types, 5)) {
+            reportError(parser, "Expected a primitive type keyword.");
+            return false;
+        }
         fprintf(parser->output, "      Type: %s", parser->currentToken.lexeme);
         advanceToken(parser);
 
         // Optional '?' for nullable type
-        if (checkToken(parser, "QUESTION")) {
-            fprintf(parser->output, "?");
-            advanceToken(parser);
-        }
+        if (matchToken(parser, "QUESTION")) fprintf(parser->output, "?");
         fprintf(parser->output, "\n");
         return true;
     }
@@ -1767,33 +1501,18 @@ bool parseExpression(Parser *parser) {
 }
 
 bool parseTernaryExpr(Parser *parser) {
-    if (parser == NULL || !parser->hasMoreTokens) return false;
-
-    if (!parseLogicalOrExpr(parser)) {
-        return false;
-    }
+    GUARD(parser);
+    REQUIRE(parseLogicalOrExpr(parser));
 
     // Handle ternary: condition ? trueExpr : falseExpr
     if (checkToken(parser, "QUESTION")) {
         fprintf(parser->output, "        Ternary operator\n");
         advanceToken(parser); // consume '?'
-
-        if (!parseExpression(parser)) {
-            reportError(parser, "Expected an expression after '?' in ternary. "
-                                "Syntax: condition ? valueIfTrue : valueIfFalse");
-            return false;
-        }
-
-        if (!matchToken(parser, "COLON")) {
-            reportError(parser, "Expected ':' in ternary expression. "
-                                "Syntax: condition ? valueIfTrue : valueIfFalse");
-            return false;
-        }
-
-        if (!parseTernaryExpr(parser)) {
-            reportError(parser, "Expected an expression after ':' in ternary.");
-            return false;
-        }
+        REQUIRE_MSG(parseExpression(parser), "Expected an expression after '?' in ternary. "
+                                             "Syntax: condition ? valueIfTrue : valueIfFalse");
+        EXPECT("COLON", "Expected ':' in ternary expression. "
+                         "Syntax: condition ? valueIfTrue : valueIfFalse");
+        REQUIRE_MSG(parseTernaryExpr(parser), "Expected an expression after ':' in ternary.");
     }
 
     return true;
@@ -1804,11 +1523,8 @@ bool parseTernaryExpr(Parser *parser) {
 // PipelineExpr = LogicalOrExpr, { "|>", FunctionCall } ;
 // --------------------------------------------------------------------------
 bool parseLogicalOrExpr(Parser *parser) {
-    if (parser == NULL || !parser->hasMoreTokens) return false;
-
-    if (!parseLogicalAndExpr(parser)) {
-        return false;
-    }
+    GUARD(parser);
+    REQUIRE(parseLogicalAndExpr(parser));
 
     // Handle pipeline operator
     while (checkToken(parser, "PIPELINE")) {
@@ -1816,26 +1532,11 @@ bool parseLogicalOrExpr(Parser *parser) {
         advanceToken(parser); // consume '|>'
 
         // After pipeline, expect a function call (identifier '(' ... ')')
-        if (!checkToken(parser, "IDENTIFIER")) {
-            reportError(parser, "Expected a function call after '|>' pipeline operator. "
-                                "Syntax: value |> functionName()");
-            return false;
-        }
-        advanceToken(parser); // consume function name
-
-        if (!matchToken(parser, "LPAREN")) {
-            reportError(parser, "Expected '(' after function name in pipeline.");
-            return false;
-        }
-
-        if (!checkToken(parser, "RPAREN")) {
-            parseArgList(parser);
-        }
-
-        if (!matchToken(parser, "RPAREN")) {
-            reportError(parser, "Expected ')' after pipeline function arguments.");
-            return false;
-        }
+        EXPECT("IDENTIFIER", "Expected a function call after '|>' pipeline operator. "
+                             "Syntax: value |> functionName()");
+        EXPECT("LPAREN", "Expected '(' after function name in pipeline.");
+        if (!checkToken(parser, "RPAREN")) REQUIRE(parseArgList(parser));
+        EXPECT("RPAREN", "Expected ')' after pipeline function arguments.");
     }
 
     // Handle logical OR
@@ -1856,22 +1557,7 @@ bool parseLogicalOrExpr(Parser *parser) {
 // LogicalAndExpr = EqualityExpr, { "&&", EqualityExpr } ;
 // --------------------------------------------------------------------------
 bool parseLogicalAndExpr(Parser *parser) {
-    if (parser == NULL || !parser->hasMoreTokens) return false;
-
-    if (!parseEqualityExpr(parser)) {
-        return false;
-    }
-
-    while (checkToken(parser, "LOGICAL_AND") || checkToken(parser, "AND")) {
-        fprintf(parser->output, "        Logical AND\n");
-        advanceToken(parser); // consume '&&'
-        if (!parseEqualityExpr(parser)) {
-            reportError(parser, "Expected an expression after '&&'.");
-            return false;
-        }
-    }
-
-    return true;
+    return LEFT_ASSOC(parseEqualityExpr, "Logical AND", "Expected expression after '&&'.", "LOGICAL_AND");
 }
 
 // --------------------------------------------------------------------------
@@ -1879,23 +1565,7 @@ bool parseLogicalAndExpr(Parser *parser) {
 // EqualityExpr = RelationalExpr, { ("==" | "!="), RelationalExpr } ;
 // --------------------------------------------------------------------------
 bool parseEqualityExpr(Parser *parser) {
-    if (parser == NULL || !parser->hasMoreTokens) return false;
-
-    if (!parseRelationalExpr(parser)) {
-        return false;
-    }
-
-    while (checkToken(parser, "EQUALITY") || checkToken(parser, "EQ") ||
-           checkToken(parser, "INEQUALITY") || checkToken(parser, "NE")) {
-        fprintf(parser->output, "        Equality: %s\n", parser->currentToken.lexeme);
-        advanceToken(parser); // consume '==' or '!='
-        if (!parseRelationalExpr(parser)) {
-            reportError(parser, "Expected an expression after equality operator.");
-            return false;
-        }
-    }
-
-    return true;
+    return LEFT_ASSOC(parseRelationalExpr, "Equality", "Expected expression after equality operator.", "EQUALITY", "INEQUALITY");
 }
 
 // --------------------------------------------------------------------------
@@ -1903,29 +1573,8 @@ bool parseEqualityExpr(Parser *parser) {
 // RelationalExpr = AdditiveExpr, { ("<" | ">" | "<=" | ">="), AdditiveExpr } ;
 // --------------------------------------------------------------------------
 bool parseRelationalExpr(Parser *parser) {
-    if (parser == NULL || !parser->hasMoreTokens) return false;
-
-    if (!parseAdditiveExpr(parser)) {
-        return false;
-    }
-
-    const char *relationalOps[] = {
-        "LESS_THAN", "LT",
-        "GREATER_THAN", "GT",
-        "LESS_EQUAL", "LE",
-        "GREATER_EQUAL", "GE"
-    };
-
-    while (checkTokenAny(parser, relationalOps, 8)) {
-        fprintf(parser->output, "        Relational: %s\n", parser->currentToken.lexeme);
-        advanceToken(parser); // consume the relational operator
-        if (!parseAdditiveExpr(parser)) {
-            reportError(parser, "Expected an expression after relational operator.");
-            return false;
-        }
-    }
-
-    return true;
+    return LEFT_ASSOC(parseAdditiveExpr, "Relational", "Expected expression after relational operator.",
+                      "LESS_THAN", "GREATER_THAN", "LESS_EQUAL", "GREATER_EQUAL");
 }
 
 // --------------------------------------------------------------------------
@@ -1933,23 +1582,7 @@ bool parseRelationalExpr(Parser *parser) {
 // AdditiveExpr = MultiplicativeExpr, { ("+" | "-"), MultiplicativeExpr } ;
 // --------------------------------------------------------------------------
 bool parseAdditiveExpr(Parser *parser) {
-    if (parser == NULL || !parser->hasMoreTokens) return false;
-
-    if (!parseMultiplicativeExpr(parser)) {
-        return false;
-    }
-
-    while (checkToken(parser, "ADDITION") || checkToken(parser, "PLUS") ||
-           checkToken(parser, "SUBTRACTION") || checkToken(parser, "MINUS")) {
-        fprintf(parser->output, "        Additive: %s\n", parser->currentToken.lexeme);
-        advanceToken(parser); // consume '+' or '-'
-        if (!parseMultiplicativeExpr(parser)) {
-            reportError(parser, "Expected an expression after arithmetic operator.");
-            return false;
-        }
-    }
-
-    return true;
+    return LEFT_ASSOC(parseMultiplicativeExpr, "Additive", "Expected expression after '+' or '-'.", "ADDITION", "SUBTRACTION");
 }
 
 // --------------------------------------------------------------------------
@@ -1957,29 +1590,8 @@ bool parseAdditiveExpr(Parser *parser) {
 // MultiplicativeExpr = UnaryExpr, { ("*" | "/" | "\" | "%"), UnaryExpr } ;
 // --------------------------------------------------------------------------
 bool parseMultiplicativeExpr(Parser *parser) {
-    if (parser == NULL || !parser->hasMoreTokens) return false;
-
-    if (!parseUnaryExpr(parser)) {
-        return false;
-    }
-
-    const char *multOps[] = {
-        "MULTIPLICATION", "STAR",
-        "DIVISION", "SLASH",
-        "INTEGER_DIVISION", "BACKSLASH",
-        "MODULO", "PERCENT"
-    };
-
-    while (checkTokenAny(parser, multOps, 8)) {
-        fprintf(parser->output, "        Multiplicative: %s\n", parser->currentToken.lexeme);
-        advanceToken(parser); // consume the operator
-        if (!parseUnaryExpr(parser)) {
-            reportError(parser, "Expected an expression after arithmetic operator.");
-            return false;
-        }
-    }
-
-    return true;
+    return LEFT_ASSOC(parseUnaryExpr, "Multiplicative", "Expected expression after arithmetic operator.",
+                      "MULTIPLICATION", "DIVISION", "INTEGER_DIVISION", "MODULO");
 }
 
 // --------------------------------------------------------------------------
@@ -1987,18 +1599,20 @@ bool parseMultiplicativeExpr(Parser *parser) {
 // UnaryExpr = [ "!" | "-" ], ExponentExpr ;
 // --------------------------------------------------------------------------
 bool parseUnaryExpr(Parser *parser) {
-    if (parser == NULL || !parser->hasMoreTokens) return false;
+    GUARD(parser);
 
     if (checkToken(parser, "LOGICAL_NOT") || checkToken(parser, "NOT")) {
         fprintf(parser->output, "        Unary NOT\n");
         advanceToken(parser); // consume '!'
-        return parseUnaryExpr(parser); // Right-to-left associativity
+        REQUIRE(parseUnaryExpr(parser)); // Right-to-left associativity
+        return true;
     }
 
     if (checkToken(parser, "SUBTRACTION") || checkToken(parser, "MINUS")) {
         fprintf(parser->output, "        Unary minus\n");
         advanceToken(parser); // consume '-'
-        return parseUnaryExpr(parser); // Right-to-left associativity
+        REQUIRE(parseUnaryExpr(parser)); // Right-to-left associativity
+        return true;
     }
 
     return parseExponentExpr(parser);
@@ -2009,19 +1623,14 @@ bool parseUnaryExpr(Parser *parser) {
 // ExponentExpr = PrimaryExpr, [ "^", ExponentExpr ] ;
 // --------------------------------------------------------------------------
 bool parseExponentExpr(Parser *parser) {
-    if (parser == NULL || !parser->hasMoreTokens) return false;
-
-    if (!parsePrimaryExpr(parser)) {
-        return false;
-    }
+    GUARD(parser);
+    REQUIRE(parsePrimaryExpr(parser));
 
     if (checkToken(parser, "EXPONENT") || checkToken(parser, "CARET")) {
         fprintf(parser->output, "        Exponent\n");
         advanceToken(parser); // consume '^'
-        if (!parseExponentExpr(parser)) {
-            reportError(parser, "Expected an expression after '^' exponent operator.");
-            return false;
-        }
+        REQUIRE_MSG(parseExponentExpr(parser),
+                    "Expected an expression after '^' exponent operator.");
     }
 
     return true;
@@ -2035,155 +1644,84 @@ bool parseExponentExpr(Parser *parser) {
 //             | ArrayAccess
 //             | FunctionCall ;
 // --------------------------------------------------------------------------
-bool parsePrimaryExpr(Parser *parser) {
-    if (parser == NULL || !parser->hasMoreTokens) return false;
-
-    // String literal
-    if (checkToken(parser, "STRING_LITERAL")) {
-        fprintf(parser->output, "        String literal: \"%s\"\n", parser->currentToken.lexeme);
-        advanceToken(parser);
-        return true;
-    }
-
-    // Integer literal
-    if (checkToken(parser, "INT_LITERAL")) {
-        fprintf(parser->output, "        Integer literal: %s\n", parser->currentToken.lexeme);
-        advanceToken(parser);
-        return true;
-    }
-
-    // Float literal
-    if (checkToken(parser, "FLOAT_LITERAL")) {
-        fprintf(parser->output, "        Float literal: %s\n", parser->currentToken.lexeme);
-        advanceToken(parser);
-        return true;
-    }
-
-    // Char literal
-    if (checkToken(parser, "CHAR_LITERAL")) {
-        fprintf(parser->output, "        Char literal: %s\n", parser->currentToken.lexeme);
-        advanceToken(parser);
-        return true;
-    }
-
-    // Boolean literals
-    if (checkToken(parser, "TRUE")) {
-        fprintf(parser->output, "        Boolean literal: true\n");
-        advanceToken(parser);
-        return true;
-    }
-
-    if (checkToken(parser, "FALSE")) {
-        fprintf(parser->output, "        Boolean literal: false\n");
-        advanceToken(parser);
-        return true;
-    }
-
-    // Null literal
-    if (checkToken(parser, "NULL")) {
-        fprintf(parser->output, "        Null literal\n");
-        advanceToken(parser);
-        return true;
-    }
-
-    // Grouped expression: '(' Expression ')'
-    if (checkToken(parser, "LPAREN")) {
-        advanceToken(parser); // consume '('
-        if (!parseExpression(parser)) {
-            reportError(parser, "Expected an expression inside parentheses.");
-            return false;
-        }
-        if (!matchToken(parser, "RPAREN")) {
-            reportError(parser, "Expected ')' to close parenthesized expression.");
-            return false;
-        }
-        return true;
-    }
-
-    // Array literal: '[' [ArgList] ']'
-    if (checkToken(parser, "LBRACKET")) {
-        advanceToken(parser); // consume '['
-        if (!checkToken(parser, "RBRACKET")) {
-            parseArgList(parser);
-        }
-        if (!matchToken(parser, "RBRACKET")) {
-            reportError(parser, "Expected ']' to close array literal.");
-            return false;
-        }
-        return true;
-    }
-
-    // Identifier or built-in I/O function (variable, function call, or array access)
-    if (checkToken(parser, "IDENTIFIER") ||
-        checkToken(parser, "READLINE") ||
-        checkToken(parser, "READINT")) {
-        bool isBuiltin = checkToken(parser, "READLINE") || checkToken(parser, "READINT");
-        fprintf(parser->output, "        Identifier: %s", parser->currentToken.lexeme);
-        char idName[256];
-        strncpy(idName, parser->currentToken.lexeme, sizeof(idName) - 1);
-        idName[sizeof(idName) - 1] = '\0';
-        advanceToken(parser);
-
-        // Function call: identifier '(' ArgList ')'
-        if (checkToken(parser, "LPAREN")) {
-            fprintf(parser->output, " (function call)\n");
-            advanceToken(parser); // consume '('
-            if (!checkToken(parser, "RPAREN")) {
-                parseArgList(parser);
-            }
-            if (!matchToken(parser, "RPAREN")) {
-                reportError(parser, "Expected ')' after function call arguments.");
-                return false;
-            }
-            return true;
-        }
-
-        // Array access: identifier '[' Expression ']'
-        if (checkToken(parser, "LBRACKET")) {
-            fprintf(parser->output, " (array access)\n");
-            advanceToken(parser); // consume '['
-            if (!parseExpression(parser)) {
-                reportError(parser, "Expected an index expression inside '[...]'.");
-                return false;
-            }
-            if (!matchToken(parser, "RBRACKET")) {
-                reportError(parser, "Expected ']' after array index.");
-                return false;
-            }
-            return true;
-        }
-
-        // Property access: identifier '.' identifier
-        if (checkToken(parser, "DOT")) {
-            fprintf(parser->output, " (property access)\n");
-            advanceToken(parser); // consume '.'
-            if (!checkToken(parser, "IDENTIFIER")) {
-                reportError(parser, "Expected a property name after '.'.");
-                return false;
-            }
-            fprintf(parser->output, "        Property: %s\n", parser->currentToken.lexeme);
+static bool matchLiteral(Parser *parser) {
+    static const struct { const char *type; const char *label; } literals[] = {
+        {"STRING_LITERAL", "String literal"},
+        {"INT_LITERAL",    "Integer literal"},
+        {"FLOAT_LITERAL",  "Float literal"},
+        {"CHAR_LITERAL",   "Char literal"},
+        {"TRUE",           "Boolean literal"},
+        {"FALSE",          "Boolean literal"},
+        {"NULL",           "Null literal"},
+    };
+    for (size_t i = 0; i < sizeof(literals) / sizeof(literals[0]); i++) {
+        if (checkToken(parser, literals[i].type)) {
+            fprintf(parser->output, "        %s: %s\n", literals[i].label, parser->currentToken.lexeme);
             advanceToken(parser);
             return true;
         }
+    }
+    return false;
+}
 
-        fprintf(parser->output, "\n");
-        if (isBuiltin) {
-            reportError(parser, "Expected '(' after built-in input function. "
-                                "Use readLine() or readInt().");
-            return false;
+// PrimaryExpr = Literal
+//             | "(", Expression, ")"
+//             | "[", [ ArgList ], "]"
+//             | ( "readLine" | "readInt" ), "(", [ ArgList ], ")"
+//             | Identifier, [ "(", [ ArgList ], ")" | "[", Expression, "]" | ".", Identifier ] ;
+bool parsePrimaryExpr(Parser *parser) {
+    GUARD(parser);
+    if (matchLiteral(parser)) return true;
+
+    // Grouped expression: '(' Expression ')'
+    if (OPT("LPAREN")) {
+        REQUIRE(parseExpression(parser));
+        EXPECT("RPAREN", "Expected ')' to close parenthesized expression.");
+        return true;
+    }
+
+    // Array literal: '[' [ ArgList ] ']'
+    if (OPT("LBRACKET")) {
+        if (!checkToken(parser, "RBRACKET")) REQUIRE(parseArgList(parser));
+        EXPECT("RBRACKET", "Expected ']' to close array literal.");
+        return true;
+    }
+
+    // Built-in I/O calls: readLine(...) | readInt(...)
+    if (CHECK_ANY("READLINE", "READINT")) {
+        fprintf(parser->output, "        Built-in call: %s\n", parser->currentToken.lexeme);
+        advanceToken(parser);
+        EXPECT("LPAREN", "Expected '(' after built-in input function. Use readLine() or readInt().");
+        if (!checkToken(parser, "RPAREN")) REQUIRE(parseArgList(parser));
+        EXPECT("RPAREN", "Expected ')' after built-in function arguments.");
+        return true;
+    }
+
+    // Identifier + optional postfix: call '()', index '[]', or property '.prop'
+    if (checkToken(parser, "IDENTIFIER")) {
+        fprintf(parser->output, "        Identifier: %s\n", parser->currentToken.lexeme);
+        advanceToken(parser);
+
+        if (OPT("LPAREN")) {
+            if (!checkToken(parser, "RPAREN")) REQUIRE(parseArgList(parser));
+            EXPECT("RPAREN", "Expected ')' after function call arguments.");
+        } else if (OPT("LBRACKET")) {
+            REQUIRE(parseExpression(parser));
+            EXPECT("RBRACKET", "Expected ']' after array index.");
+        } else if (OPT("DOT")) {
+            EXPECT_LOG("IDENTIFIER", "Property", "Expected a property name after '.'.");
         }
         return true;
     }
 
-    // Noise word (could be a keyword used as identifier context)
+    // Noise word fallback
     if (checkToken(parser, "NOISE_WORD")) {
         fprintf(parser->output, "        Noise word: %s\n", parser->currentToken.lexeme);
         advanceToken(parser);
         return true;
     }
 
-    reportError(parser, "Expected a primary expression: a literal (number, string, char, bool, null), "
-                        "an identifier, a parenthesized expression, or an array literal.");
+    reportError(parser, "Expected a primary expression: a literal, identifier, '(...)', or '[...]'.");
     return false;
 }
 
@@ -2224,7 +1762,7 @@ bool parseSourceFile(const char *sourceFilePath, const char *symbolTablePath, co
 
     fprintf(parser.output, "\n");
     if (success) {
-        fprintf(parser.output, "✓ Program parsed successfully — no syntax errors.\n");
+        fprintf(parser.output, "[OK] Program parsed successfully - no syntax errors.\n");
     } else {
         fprintf(parser.output, "✗ Program parsed with %d error(s).\n", parser.errorCount);
     }
