@@ -1,0 +1,9 @@
+// E. Arithmetic precedence, unary minus, exponent, integer division, modulo, compound ops
+int calculation = -(2 ^ 3) + 10 / 2 \ 2 % 3;
+print("\nPrecedence test: -(2 ^ 3) + 10 / 2 \\ 2 % 3 = " + calculation);
+calculation += 1;
+calculation -= 1;
+calculation *= 2;
+calculation /= 2;
+calculation %= 5;
+print("After +=1, -=1, *=2, /=2, %=5 -> " + calculation);

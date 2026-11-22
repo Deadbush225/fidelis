@@ -14,7 +14,6 @@ state RootState {
                     loop {
                         if (numbers[0] == 10) {
                             print("Reached inner boundary.");
-                            return;
                         }
                     }
                 }
