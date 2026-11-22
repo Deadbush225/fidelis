@@ -922,7 +922,7 @@ bool parsePipelineExpr(Parser *parser) {
     while (OPT("PIPELINE")) {
         matchedOperator = true;
         ParseNode *pipeParent = parser->currentNode;
-        NODE("FunctionCall");
+        NODE(checkToken(parser, "PRINT") ? "PrintStmt" : "FunctionCall");
 
         if (CHECK_ANY("IDENTIFIER", "PRINT")) {
             advanceToken(parser);
@@ -1132,7 +1132,7 @@ bool parsePrimaryExpr(Parser *parser) {
 
     // Built-in I/O calls: readLine(...) | readInt(...)
     if (CHECK_ANY("READLINE", "READINT")) {
-        NODE("FunctionCall");
+        NODE("InputExpr");
         advanceToken(parser);
         SymbolEntry openParen = parser->currentToken;
         EXPECT("LPAREN", "Expected '(' after built-in input function. Use readLine() or readInt().");

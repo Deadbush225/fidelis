@@ -524,10 +524,14 @@ static SemType validateCall(SemanticAnalyzer *sa, const ParseNode *callNode,
     // Determine callee name (built-in READLINE/READINT token or IDENTIFIER)
     const ParseNode *calleeNode = findChild(callNode, "READLINE", 0);
     const char *fnName = NULL;
+    bool isPrintCall = false;
     if (calleeNode != NULL) {
         fnName = "readLine";
     } else if ((calleeNode = findChild(callNode, "READINT", 0)) != NULL) {
         fnName = "readInt";
+    } else if ((calleeNode = findChild(callNode, "PRINT", 0)) != NULL) {
+        fnName = "print";
+        isPrintCall = true;
     } else {
         calleeNode = findChild(callNode, "IDENTIFIER", 0);
         fnName = nodeLexeme(calleeNode);
@@ -563,6 +567,16 @@ static SemType validateCall(SemanticAnalyzer *sa, const ParseNode *callNode,
             argTypes[totalArgs] = analyzeExpression(sa, child);
             totalArgs++;
         }
+    }
+
+    if (isPrintCall) {
+        if (totalArgs < 1 || totalArgs > 2) {
+            semError(sa, calleeNode,
+                     "print() expects 1 or 2 argument(s), but got %d.", totalArgs);
+        } else if (!isErrorType(argTypes[0]) && argTypes[0].base == TYPE_VOID) {
+            semError(sa, argNodes[0], "Expression does not produce a printable value.");
+        }
+        return makePrimitive(TYPE_VOID);
     }
 
     Symbol *fnSym = lookupSymbol(sa->currentScope, fnName);
@@ -883,7 +897,7 @@ static SemType analyzeExpression(SemanticAnalyzer *sa, const ParseNode *node) {
         for (size_t i = (size_t)firstPipe; i < node->childCount; i++) {
             if (isLabel(node->children[i], "PIPELINE")) {
                 const ParseNode *stage = firstMeaningfulInRange(node, i + 1, node->childCount);
-                if (stage != NULL && isLabel(stage, "FunctionCall")) {
+                if (stage != NULL && (isLabel(stage, "FunctionCall") || isLabel(stage, "PrintStmt"))) {
                     current = validateCall(sa, stage, &current);
                 } else {
                     semError(sa, node->children[i], "Expected a function call after '|>' operator.");
@@ -895,7 +909,7 @@ static SemType analyzeExpression(SemanticAnalyzer *sa, const ParseNode *node) {
     }
 
     // ---- FunctionCall ----
-    if (isLabel(node, "FunctionCall")) {
+    if (isLabel(node, "FunctionCall") || isLabel(node, "InputExpr")) {
         return validateCall(sa, node, NULL);
     }
 

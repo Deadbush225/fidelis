@@ -690,6 +690,8 @@ static Value invokeFunctionCall(Interpreter *ip, const ParseNode *callNode,
         fnName = "readLine";
     } else if ((calleeNode = findChild(callNode, "READINT", 0)) != NULL) {
         fnName = "readInt";
+    } else if ((calleeNode = findChild(callNode, "PRINT", 0)) != NULL) {
+        fnName = "print";
     } else {
         calleeNode = findChild(callNode, "IDENTIFIER", 0);
         fnName = nodeLexeme(calleeNode);
@@ -751,6 +753,22 @@ static Value invokeFunctionCall(Interpreter *ip, const ParseNode *callNode,
         }
         for (int k = 0; k < argCount; k++) freeValue(args[k]);
         return result;
+    }
+    if (strcmp(fnName, "print") == 0) {
+        if (argCount >= 1) {
+            char *text = valueToString(args[0]);
+            if (argCount >= 2) {
+                char *endText = valueToString(args[1]);
+                printf("%s%s", text, endText);
+                free(endText);
+            } else {
+                printf("%s\n", text);
+            }
+            fflush(stdout);
+            free(text);
+        }
+        for (int k = 0; k < argCount; k++) freeValue(args[k]);
+        return makeNull();
     }
 
     // User-defined function lookup
@@ -1044,7 +1062,7 @@ static Value evalExpression(Interpreter *ip, const ParseNode *node) {
         for (size_t i = (size_t)firstPipe; i < node->childCount && !ip->hadRuntimeError; i++) {
             if (isLabel(node->children[i], "PIPELINE")) {
                 const ParseNode *stage = firstMeaningfulInRange(node, i + 1, node->childCount);
-                if (stage != NULL && isLabel(stage, "FunctionCall")) {
+                if (stage != NULL && (isLabel(stage, "FunctionCall") || isLabel(stage, "PrintStmt"))) {
                     Value next = invokeFunctionCall(ip, stage, &current);
                     freeValue(current);
                     current = next;
@@ -1055,7 +1073,7 @@ static Value evalExpression(Interpreter *ip, const ParseNode *node) {
     }
 
     // ---- FunctionCall ----
-    if (isLabel(node, "FunctionCall")) {
+    if (isLabel(node, "FunctionCall") || isLabel(node, "InputExpr")) {
         return invokeFunctionCall(ip, node, NULL);
     }
 
@@ -1200,7 +1218,12 @@ static void execEnsureStmt(Interpreter *ip, const ParseNode *node) {
         return;
     }
 
-    // Value is non-null: define if 'Type' was provided, otherwise update existing variable
+    if (val.kind == VAL_NULL) {
+        freeValue(val);
+        execBlock(ip, elseBlock, true);
+        return;
+    }
+
     const ParseNode *typeNode = findChild(node, "Type", 0);
     const char *name = nodeLexeme(nameNode);
 
@@ -1222,14 +1245,6 @@ static void execEnsureStmt(Interpreter *ip, const ParseNode *node) {
             triggerReactWatchers(ip, name, node);
         }
     }
-
-    if (val.kind == VAL_NULL) {
-        freeValue(val);
-        execBlock(ip, elseBlock, true);
-        return;
-    }
-
-    envDefine(ip->currentEnv, nodeLexeme(nameNode), val);
 }
 
 static Value applyCompoundOp(Interpreter *ip, const ParseNode *opNode, Value cur, Value rhs) {
