@@ -77,6 +77,7 @@ void freeParseTree(ParseNode *node);
 
 void reportError(Parser *parser, const char *message);
 void reportErrorAfterPrev(Parser *parser, const char *message);
+void reportErrorAtToken(Parser *parser, const SymbolEntry *tok, const char *message);
 
 // ============================================================================
 // PARSER API

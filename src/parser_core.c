@@ -655,6 +655,21 @@ void reportError(Parser *parser, const char *message) {
     }
 }
 
+void reportErrorAtToken(Parser *parser, const SymbolEntry *tok, const char *message) {
+    if (parser == NULL || tok == NULL) return;
+    parser->encounteredError = true;
+    parser->errorCount++;
+
+    printErrorBoxAt(stderr, parser, message,
+                    tok->sourceLine, tok->sourceColumn,
+                    tok->symbolTableLine, tok->type, tok->lexeme, tok->lexeme, true);
+    if (parser->output != NULL) {
+        printErrorBoxAt(parser->output, parser, message,
+                        tok->sourceLine, tok->sourceColumn,
+                        tok->symbolTableLine, tok->type, tok->lexeme, tok->lexeme, false);
+    }
+}
+
 void reportErrorAfterPrev(Parser *parser, const char *message) {
     if (parser == NULL) return;
     if (!parser->hasPrevToken) {

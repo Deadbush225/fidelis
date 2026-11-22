@@ -171,6 +171,18 @@ static bool expectSemicolon(Parser *parser, const char *errMsg, const char *ctx)
 #define EXPECT_SEMI(msg, ctx) \
     do { if (!expectSemicolon(parser, (msg), (ctx))) FAIL(); } while (0)
 
+static bool expectClosing(Parser *parser, const char *closingTok,
+                          const SymbolEntry *openTok, const char *errMsg) {
+    if (matchToken(parser, closingTok)) {
+        return true;
+    }
+    reportErrorAtToken(parser, openTok, errMsg);
+    return false;
+}
+
+#define EXPECT_CLOSE(tok, openTok, msg) \
+    do { if (!expectClosing(parser, (tok), &(openTok), (msg))) FAIL(); } while (0)
+
 // ============================================================================
 //                     RECURSIVE DESCENT PARSING FUNCTIONS
 // ============================================================================
@@ -303,9 +315,10 @@ bool parseSleepStmt(Parser *parser) {
     GUARD(parser);
     NODE("SleepStmt");
     EXPECT("SLEEP",  "Expected 'sleep' keyword.");
+    SymbolEntry openParen = parser->currentToken;
     EXPECT("LPAREN", "Expected '(' after 'sleep'. Usage: sleep(milliseconds);");
     REQUIRE(parseExpression(parser));
-    EXPECT("RPAREN", "Expected ')' after sleep argument.");
+    EXPECT_CLOSE("RPAREN", openParen, "Expected ')' after sleep argument.");
     PASS();
 }
 
@@ -386,6 +399,7 @@ bool parseBlock(Parser *parser) {
     GUARD(parser);
     NODE("Block");
 
+    SymbolEntry openBrace = parser->currentToken;
     EXPECT("LBRACE", "Expected '{' to start a block.");
 
     // Parse statements inside the block
@@ -397,7 +411,7 @@ bool parseBlock(Parser *parser) {
         }
     }
 
-    EXPECT("RBRACE", "Expected '}' to close the block. "
+    EXPECT_CLOSE("RBRACE", openBrace, "Expected '}' to close the block. "
                      "Every opening '{' must have a matching '}'.");
     PASS();
 }
@@ -430,9 +444,10 @@ bool parseReactDecl(Parser *parser) {
     NODE("ReactDecl");
 
     EXPECT("REACT",  "Expected 'react' keyword. Syntax: react (variable) { ... }");
+    SymbolEntry openParen = parser->currentToken;
     EXPECT("LPAREN", "Expected '(' after 'react'. Syntax: react (variable) { ... }");
     EXPECT_LOG("IDENTIFIER", "Watching", "Expected a variable name inside react().");
-    EXPECT("RPAREN", "Expected ')' after react variable.");
+    EXPECT_CLOSE("RPAREN", openParen, "Expected ')' after react variable.");
     OPT_NOISE("do");
     REQUIRE(parseBlock(parser));
 
@@ -450,11 +465,12 @@ bool parseFnDecl(Parser *parser) {
 
     EXPECT("FN",         "Expected 'fn' keyword.");
     EXPECT("IDENTIFIER", "Expected a function name after 'fn'.");
+    SymbolEntry openParen = parser->currentToken;
     EXPECT("LPAREN",     "Expected '(' after function name.");
     if (!checkToken(parser, "RPAREN")) {
         REQUIRE(parseParamList(parser));
     }
-    EXPECT("RPAREN",     "Expected ')' after function parameters.");
+    EXPECT_CLOSE("RPAREN", openParen, "Expected ')' after function parameters.");
     EXPECT("COLON",      "Expected ':' before return type.");
     REQUIRE(parseType(parser));
     matchNoise(parser, "do");
@@ -504,11 +520,12 @@ bool parseType(Parser *parser) {
     NODE("Type");
 
     if (OPT("LBRACKET")) {
+        SymbolEntry openBracket = parser->prevToken;
         REQUIRE(parseType(parser));
         if (OPT("COMMA")) {
             EXPECT("INT_LITERAL", "Expected an integer size after ',' in fixed-size array type.");
         }
-        EXPECT("RBRACKET", "Expected ']' to close array type.");
+        EXPECT_CLOSE("RBRACKET", openBracket, "Expected ']' to close array type.");
         OPT("QUESTION");
         PASS();
     }
@@ -544,8 +561,9 @@ bool parseType(Parser *parser) {
 static bool parseAssignmentTail(Parser *parser) {
     GUARD(parser);
     while (OPT("LBRACKET")) {
+        SymbolEntry openBracket = parser->prevToken;
         REQUIRE(parseExpression(parser));
-        EXPECT("RBRACKET", "Expected ']' after array index. Syntax: arrayName[index] = value;");
+        EXPECT_CLOSE("RBRACKET", openBracket, "Expected ']' after array index. Syntax: arrayName[index] = value;");
     }
 
     if (!CHECK_ANY("ASSIGNMENT", "ADD_ASSIGN", "SUBTRACT_ASSIGN",
@@ -578,10 +596,11 @@ bool parseIdentStmt(Parser *parser) {
     ParseNode *stmtNode = parser->currentNode;
     EXPECT_LOG("IDENTIFIER", "Target", "Expected an identifier.");
     if (OPT("LPAREN")) {
+        SymbolEntry openParen = parser->prevToken;
         strncpy(stmtNode->label, "FunctionCall", sizeof(stmtNode->label) - 1);
         stmtNode->label[sizeof(stmtNode->label) - 1] = '\0';
         if (!checkToken(parser, "RPAREN")) REQUIRE(parseArgList(parser));
-        EXPECT("RPAREN", "Expected ')' after function call arguments.");
+        EXPECT_CLOSE("RPAREN", openParen, "Expected ')' after function call arguments.");
         PASS();
     }
     RETURN(parseAssignmentTail(parser));
@@ -601,10 +620,11 @@ static bool parseIdentOrEnsureStmt(Parser *parser) {
     EXPECT_LOG("IDENTIFIER", "Target", "Expected an identifier.");
 
     if (OPT("LPAREN")) {
+        SymbolEntry openParen = parser->prevToken;
         strncpy(stmtNode->label, "FunctionCall", sizeof(stmtNode->label) - 1);
         stmtNode->label[sizeof(stmtNode->label) - 1] = '\0';
         if (!checkToken(parser, "RPAREN")) REQUIRE(parseArgList(parser));
-        EXPECT("RPAREN", "Expected ')' after function call arguments.");
+        EXPECT_CLOSE("RPAREN", openParen, "Expected ')' after function call arguments.");
         parser->currentNode = _prevNode;
         EXPECT_SEMI("Expected ';' after statement.", "statement termination");
         PASS();
@@ -649,6 +669,7 @@ bool parsePrintStmt(Parser *parser) {
 
     // Consume 'print'
     EXPECT("PRINT", "Expected 'print' keyword. Use 'print(expression);' to output values.");
+    SymbolEntry openParen = parser->currentToken;
     EXPECT("LPAREN", "Expected '(' after 'print'. Syntax: print(expression);");
 
     // Parse the expression inside print()
@@ -662,8 +683,7 @@ bool parsePrintStmt(Parser *parser) {
         REQUIRE(parseExpression(parser));
     }
     
-    EXPECT("RPAREN", "Expected ')' to close the print() call. "
-            "Syntax: print(expression);");
+    EXPECT_CLOSE("RPAREN", openParen, "Expected ')' to close the print() call. ");
     PASS();
 }
 
@@ -684,9 +704,10 @@ bool parseIfStmt(Parser *parser) {
     NODE("IfStmt");
 
     EXPECT("IF",     "Expected 'if' keyword. Syntax: if (condition) { ... }");
+    SymbolEntry openParen = parser->currentToken;
     EXPECT("LPAREN", "Expected '(' after 'if'. Syntax: if (condition) { ... }");
     REQUIRE(parseExpression(parser));
-    EXPECT("RPAREN", "Expected ')' after if condition. Syntax: if (condition) { ... }");
+    EXPECT_CLOSE("RPAREN", openParen, "Expected ')' after if condition. Syntax: if (condition) { ... }");
 
     REQUIRE(parseBlockOrStmt(parser));
 
@@ -723,6 +744,7 @@ bool parseForStmt(Parser *parser) {
     NODE("ForStmt");
 
     EXPECT("FOR",    "Expected 'for' keyword. Syntax: for (type var = init; condition; increment) { ... }");
+    SymbolEntry openParen = parser->currentToken;
     EXPECT("LPAREN", "Expected '(' after 'for'. Syntax: for (type var = init; condition; increment) { ... }");
 
     REQUIRE(parseType(parser));
@@ -753,7 +775,7 @@ bool parseForStmt(Parser *parser) {
 
     REQUIRE(parseAssignment(parser));
 
-    EXPECT("RPAREN", "Expected ')' after for loop header.");
+    EXPECT_CLOSE("RPAREN", openParen, "Expected ')' after for loop header.");
     OPT_NOISE("do");
     REQUIRE(parseBlock(parser));
 
@@ -774,13 +796,15 @@ bool parseMatchStmt(Parser *parser) {
     EXPECT("MATCH", "Expected 'match' keyword. Syntax: match (expression) { case -> action; }");
 
     if (OPT("LPAREN")) {
+        SymbolEntry openParen = parser->prevToken;
         REQUIRE(parseExpression(parser));
-        EXPECT("RPAREN", "Expected ')' after match expression.");
+        EXPECT_CLOSE("RPAREN", openParen, "Expected ')' after match expression.");
     } else {
         EXPECT_LOG("IDENTIFIER", "Match subject", "Expected an identifier or '(' after 'match'.");
     }
 
     OPT_NOISE("do");
+    SymbolEntry openBrace = parser->currentToken;
     EXPECT("LBRACE", "Expected '{' to start match cases. Syntax: match expr { case -> action; }");
 
     int caseCount = 0;
@@ -826,7 +850,7 @@ bool parseMatchStmt(Parser *parser) {
                             "Add cases like: \"value\" -> { ... } or _ -> { ... }");
     }
 
-    EXPECT("RBRACE", "Expected '}' to close match statement.");
+    EXPECT_CLOSE("RBRACE", openBrace, "Expected '}' to close match statement.");
     PASS();
 }
 
@@ -907,10 +931,11 @@ bool parsePipelineExpr(Parser *parser) {
             parser->currentNode = pipeParent;
             FAIL();
         }
-
+        
+        SymbolEntry openParen = parser->currentToken;
         EXPECT("LPAREN", "Expected '(' after function name in pipeline.");
         if (!checkToken(parser, "RPAREN")) REQUIRE(parseArgList(parser));
-        EXPECT("RPAREN", "Expected ')' after pipeline function arguments.");
+        EXPECT_CLOSE("RPAREN", openParen, "Expected ')' after pipeline function arguments.");
         parser->currentNode = pipeParent;
     }
 
@@ -1032,12 +1057,14 @@ static bool parsePostfixExpr(Parser *parser) {
 
     while (CHECK_ANY("LPAREN", "LBRACKET", "DOT")) {
         if (OPT("LPAREN")) {
+            SymbolEntry openParen = parser->prevToken;
             if (!checkToken(parser, "RPAREN")) REQUIRE(parseArgList(parser));
-            EXPECT("RPAREN", "Expected ')' after function call arguments.");
+            EXPECT_CLOSE("RPAREN", openParen, "Expected ')' after function call arguments.");
             wrapChildrenFrom(parser->currentNode, startIdx, "FunctionCall");
         } else if (OPT("LBRACKET")) {
+            SymbolEntry openBracket = parser->prevToken;
             REQUIRE(parseExpression(parser));
-            EXPECT("RBRACKET", "Expected ']' after array index.");
+            EXPECT_CLOSE("RBRACKET", openBracket, "Expected ']' after array index.");
             wrapChildrenFrom(parser->currentNode, startIdx, "ArrayAccess");
         } else if (OPT("DOT")) {
             EXPECT_LOG("IDENTIFIER", "Property", "Expected a property name after '.'.");
@@ -1085,18 +1112,21 @@ bool parsePrimaryExpr(Parser *parser) {
     if (matchLiteral(parser)) PASS();
 
     // Grouped expression: '(' Expression ')'
-    if (OPT("LPAREN")) {
+    if (checkToken(parser, "LPAREN")) {
+        SymbolEntry openParen = parser->currentToken;
+        advanceToken(parser);
         REQUIRE(parseExpression(parser));
-        EXPECT("RPAREN", "Expected ')' to close parenthesized expression.");
+        EXPECT_CLOSE("RPAREN", openParen, "Unclosed '(' — expected matching ')'.");
         PASS();
     }
 
     // Array literal: '[' [ ArgList ] ']'
     if (checkToken(parser, "LBRACKET")) {
+        SymbolEntry openBracket = parser->currentToken;
         NODE("ArrayLiteral");
         advanceToken(parser);
         if (!checkToken(parser, "RBRACKET")) REQUIRE(parseArgList(parser));
-        EXPECT("RBRACKET", "Expected ']' to close array literal.");
+        EXPECT_CLOSE("RBRACKET", openBracket, "Unclosed '[' — expected matching ']'.");
         PASS();
     }
 
@@ -1104,9 +1134,10 @@ bool parsePrimaryExpr(Parser *parser) {
     if (CHECK_ANY("READLINE", "READINT")) {
         NODE("FunctionCall");
         advanceToken(parser);
+        SymbolEntry openParen = parser->currentToken;
         EXPECT("LPAREN", "Expected '(' after built-in input function. Use readLine() or readInt().");
         if (!checkToken(parser, "RPAREN")) REQUIRE(parseArgList(parser));
-        EXPECT("RPAREN", "Expected ')' after built-in function arguments.");
+        EXPECT_CLOSE("RPAREN", openParen, "Expected ')' after built-in function arguments.");
         PASS();
     }
 
