@@ -142,7 +142,7 @@ summary:
         printPhaseHeader("BUILD SUMMARY");
         printf("  " CLR_YELLOW "Input file:     " CLR_RESET "%s\n", inputFileName);
         printf("  " CLR_YELLOW "Symbol table:   " CLR_RESET CLR_DIM "%s" CLR_RESET "\n", symbolTableFilePath);
-        printf("  " CLR_YELLOW "Transition log: " CLR_RESET CLR_DIM "%s" CLR_RESET "\n", transitionTraceOutputPath);
+        // printf("  " CLR_YELLOW "Transition log: " CLR_RESET CLR_DIM "%s" CLR_RESET "\n", transitionTraceOutputPath);
         printf("  " CLR_YELLOW "Parse tree:     " CLR_RESET CLR_DIM "%s" CLR_RESET "\n", parseOutputPath);
         printf("  " CLR_YELLOW "Semantic rep.:  " CLR_RESET CLR_DIM "%s" CLR_RESET "\n\n", semanticOutputPath);
 

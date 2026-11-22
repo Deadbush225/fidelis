@@ -1,1 +1,2 @@
-print("Loading", "... ");
+roomTemp = targetTemp;
+roomTemp = baseTemp + 5;
