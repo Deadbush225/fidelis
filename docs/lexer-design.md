@@ -22,22 +22,26 @@ A token contains:
   characters plus the terminator.
 - `transitions`: a null-terminated string containing the DFA state path for
   this token, with capacity for 511 characters plus the terminator.
+- `line` and `column`: the 1-based starting position of the token.
 
 The token types are grouped in `lexer.h` as literals, keywords, operators,
 delimiters, brackets, comments, `TOKEN_EOF`, and ten specific error types.
 `getTokenTypeName()` maps a token type to its printable name.
+For compatibility, `lexer.h` also defines aliases for common operator names,
+such as `TOKEN_PLUS` for `TOKEN_ADDITION` and `TOKEN_EQ` for `TOKEN_EQUALITY`.
 
 The caller supplies the input stream and a writable transition-log stream.
-`getNextToken()` writes detailed scanning messages to standard output and to
-the transition-log stream. The caller owns both streams and is responsible for
+When `lexerLoggingEnabled` is true, `getNextToken()` writes detailed scanning
+messages to standard output and to the transition-log stream. Logging is
+disabled by default. The caller owns both streams and is responsible for
 closing them. Continue calling `getNextToken()` until it returns `TOKEN_EOF`.
 
 ## Scanning model
 
 Each call to `getNextToken()` starts in `STATE_START`, consumes characters
 with `fgetc()`, and advances through `LexerState` values until it reaches
-`STATE_DONE`. State data is local to that call; the `FILE *` position preserves
-progress between calls.
+`STATE_DONE`. The DFA state and lexeme are local to that call. The `FILE *`
+position and file-scope line/column counters preserve progress between calls.
 
 At the start state, the lexer:
 
@@ -55,6 +59,72 @@ For each token, the lexer records the DFA states it visits in
 scanner changes state. Leading whitespace is skipped without being included in
 the path. The lexer also writes per-character consumption and token
 acceptance/error messages to standard output and the supplied transition log.
+
+### Overall flow
+
+The lexer scans the source stream one token at a time. Each call to
+`getNextToken()` skips leading whitespace, follows the appropriate DFA path,
+then returns one token with its source position and state trace.
+
+```text
+source.fdls
+    |
+    v
+getNextToken()
+    |
+    +--> skip leading whitespace
+    |
+    +--> STATE_START: inspect first character
+    |       |
+    |       +--> digit ------> number states
+    |       +--> letter/_ ---> keyword or identifier states
+    |       +--> quote ------> string or character states
+    |       +--> slash ------> comment or division states
+    |       +--> operator ---> operator/lookahead states
+    |       `--> punctuation or unknown character
+    |
+    +--> consume characters belonging to this lexeme
+    +--> push back lookahead that belongs to the next token
+    +--> return Token { type, lexeme, line, column, transitions }
+    |
+    `--> caller requests the next token until TOKEN_EOF
+```
+
+### Worked scan: a declaration
+
+For the source:
+
+```fidelis
+int x = 12;
+```
+
+`getNextToken()` is called repeatedly. Whitespace separates tokens but is not
+returned as a token. The result is approximately:
+
+```text
+Position  Token type    Lexeme  DFA transitions
+1:1       INT           int     STATE_START -> STATE_I -> STATE_IN_KW -> STATE_INT
+1:5       IDENTIFIER    x       STATE_START -> STATE_IN_IDENTIFIER
+1:7       ASSIGNMENT    =       STATE_START -> STATE_IN_EQUALS
+1:9       INT_LITERAL   12      STATE_START -> STATE_IN_NUMBER
+1:11      SEMICOLON     ;       STATE_START
+1:12      EOF           ""      STATE_START
+```
+
+For `int`, the first character selects the `i` keyword branch; the following
+characters reach the `int` candidate state. The lexer checks the next character
+to confirm the keyword boundary, then pushes that whitespace back so the next
+call can skip it. The identifier and integer paths similarly read one
+character beyond their lexeme, then return that character to the stream.
+
+`=` uses a lookahead state to decide whether it is assignment or part of `==`.
+Since the following character is whitespace, it returns `ASSIGNMENT` and
+pushes the whitespace back. `;` is emitted directly from the start state
+without an additional DFA state. At end-of-file, a separate call returns
+`TOKEN_EOF`.
+
+The token stream describes lexical units only. Whether these tokens form a
+valid declaration is decided by the parser, not by the lexer.
 
 ### Identifiers and keywords
 
@@ -125,19 +195,20 @@ carriage return, or end-of-file before the closing quote produces
 lexer attempts to append the EOF value to the lexeme before reporting the
 unterminated string.
 
-Single-quoted input is scanned as a character literal. The current
-implementation accepts exactly one source character between the quotes, such
-as `'A'`. It checks the accumulated content length before checking whether the
-current character is a closing quote or a line ending. Once two content
-characters have accumulated, it emits `TOKEN_ERR_CHAR_TOO_LONG` and consumes
-input through the next single quote, newline, carriage return, or EOF for
-recovery. This check takes precedence over unterminated-character detection:
-for example, two content characters followed by EOF still produce
-`TOKEN_ERR_CHAR_TOO_LONG`, while one content character followed by EOF
-produces `TOKEN_ERR_UNTERMINATED_CHAR`. Empty literals produce
-`TOKEN_ERR_EMPTY_CHAR`. A backslash is not interpreted as an escape character,
-so `'\n'` produces `TOKEN_ERR_CHAR_TOO_LONG`. A quote following a backslash is
-treated as the closing quote, not as escaped character content.
+Single-quoted input is scanned as a character literal. On reaching a closing
+quote, the current implementation accepts one content byte, such as `'A'`, or
+two content bytes when the first is a backslash, such as `'\n'` or `'\\'`.
+These escape-shaped forms are accepted lexically; the lexer does not decode or
+validate the escape. A quote immediately after a backslash is still handled as
+the closing quote, not as escaped content.
+
+An empty literal produces `TOKEN_ERR_EMPTY_CHAR`. A closing quote after other
+overlong content produces `TOKEN_ERR_CHAR_TOO_LONG`. A third content byte
+switches the scanner into too-long recovery, which consumes through the next
+single quote, newline, carriage return, or EOF. If EOF, newline, or carriage
+return is reached while still in the ordinary character state, the result is
+`TOKEN_ERR_UNTERMINATED_CHAR` regardless of how many bytes were accumulated;
+for example, two ordinary content bytes followed by EOF are unterminated.
 
 ### Error tokens
 
@@ -151,17 +222,18 @@ are:
 | `TOKEN_ERR_INVALID_NUMBER` | `ERR_INVALID_NUMBER` | A number is joined to identifier characters, or a float contains letters, underscores, or additional dots. |
 | `TOKEN_ERR_MALFORMED_FLOAT` | `ERR_MALFORMED_FLOAT` | A decimal point after digits is not followed by a digit, as in `42.`. |
 | `TOKEN_ERR_UNTERMINATED_STRING` | `ERR_UNTERMINATED_STRING` | A string reaches EOF or an unescaped newline or carriage return before its closing quote. |
-| `TOKEN_ERR_UNTERMINATED_CHAR` | `ERR_UNTERMINATED_CHAR` | A character literal reaches EOF, newline, or carriage return before its closing quote, before two content characters have accumulated. |
-| `TOKEN_ERR_CHAR_TOO_LONG` | `ERR_CHAR_TOO_LONG` | Two content characters have accumulated before the closing quote is processed. |
+| `TOKEN_ERR_UNTERMINATED_CHAR` | `ERR_UNTERMINATED_CHAR` | EOF, newline, or carriage return is reached before the closing quote while scanning an ordinary character literal. |
+| `TOKEN_ERR_CHAR_TOO_LONG` | `ERR_CHAR_TOO_LONG` | A closing quote follows too much content, or a third content byte starts too-long recovery. |
 | `TOKEN_ERR_EMPTY_CHAR` | `ERR_EMPTY_CHAR` | An empty character literal, `''`, is encountered. |
 | `TOKEN_ERR_INVALID_OPERATOR` | `ERR_INVALID_OPERATOR` | `&` is not followed by `&`, or `|` is not followed by `|` or `>`. |
 | `TOKEN_ERR_IDENTIFIER_TOO_LONG` | `ERR_IDENTIFIER_TOO_LONG` | An identifier exceeds 32 characters. |
 | `TOKEN_ERR_UNRECOGNIZED` | `ERR_UNRECOGNIZED` | A character that does not begin a recognized token is encountered. |
 
 Error tokens retain the source text accumulated in the lexeme when the lexer
-detects the error. For an overlong character literal, the lexer consumes input
-through the closing quote to recover, but does not append that remaining input
-to the error lexeme.
+detects the error. During overlong-character recovery, consumed bytes through
+the closing quote are appended to the lexeme, subject to its fixed buffer
+capacity; a newline, carriage return, or EOF is pushed back rather than
+appended.
 
 ### Operators and punctuation
 
@@ -214,13 +286,15 @@ decides whether to print, preserve, or ignore them.
   255 bytes).
 - `Token.transitions` has a fixed capacity of 512 bytes. If a state path is too
   long to fit, additional state names are silently omitted.
-- Tokens do not carry source line or column locations.
 - Error lexemes contain the source text accumulated when the error is detected;
-  they are not structured diagnostics and do not include source locations.
+  they are not structured diagnostics. Tokens include starting line and column
+  fields, but errors do not gain additional structured diagnostic details.
   Recovery from a malformed construct is limited.
 - Numeric literals have limited lexical validation: exponents and numeric
   range are not checked, and a float requires at least one digit after its
   decimal point.
+- Call `resetLexerPosition()` before starting a new source stream if the same
+  process lexes multiple files; line and column are file-scope state.
 - The code is the source of truth for actual behavior. When language rules
   change, update the DFA, token definitions, examples, and tests together.
 
@@ -234,8 +308,10 @@ Build with the Windows helper script, then pass a `.fdls` source file:
 ```
 
 The demo requires an input-file argument. It writes the token table, including
-each token's state path, to `outputs/symbol_table.txt` and detailed scanner
-messages to `outputs/transition_trace.txt`. The sample files demonstrate
-tokenization and selected lexical errors. For example, unsupported characters
-produce `TOKEN_ERR_UNRECOGNIZED`; malformed identifier-like text demonstrates
-token boundaries, not parser validation.
+each token's state path, to `outputs/symbol_table.txt`. It creates
+`outputs/transition_trace.txt`, but detailed scanner messages are written only
+when `lexerLoggingEnabled` is set to `true`; it is `false` by default, so the
+normal CLI run does not populate that trace with scanning messages. The sample
+files demonstrate tokenization and selected lexical errors. For example,
+unsupported characters produce `TOKEN_ERR_UNRECOGNIZED`; malformed
+identifier-like text demonstrates token boundaries, not parser validation.
