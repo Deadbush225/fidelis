@@ -267,7 +267,7 @@ bool parseBlockStatement(Parser *parser) {
     ParseFn fn = lookupRule(parser, rules, sizeof(rules) / sizeof(rules[0]));
     if (fn != NULL) RETURN(fn(parser));
 
-    reportError(parser, "Expected a block statement keyword (if, loop, for, match, ensure, state, react, or fn).");
+    reportError(parser, "Expected a block statement keyword (if, loop, for, match, state, react, or fn).");
     FAIL();
 }
 
@@ -411,8 +411,7 @@ bool parseBlock(Parser *parser) {
         }
     }
 
-    EXPECT_CLOSE("RBRACE", openBrace, "Expected '}' to close the block. "
-                     "Every opening '{' must have a matching '}'.");
+    EXPECT_CLOSE("RBRACE", openBrace, "Unclosed '{' — expected matching '}'.");
     PASS();
 }
 
@@ -824,6 +823,7 @@ bool parseMatchStmt(Parser *parser) {
             advanceToken(parser);
             caseCount++;
         } else {
+            reportError(parser, "Expected a match pattern (literal or '_') before '->'.");
             FAIL();
         }
 
@@ -1147,6 +1147,10 @@ bool parsePrimaryExpr(Parser *parser) {
         PASS();
     }
 
-    reportError(parser, "Expected a primary expression: a literal, identifier, '(...)', or '[...]'.");
+    if (CHECK_ANY("SEMICOLON", "RPAREN", "RBRACKET", "RBRACE", "COMMA")) {
+        reportError(parser, "Missing value or expression.");
+    } else {
+        reportError(parser, "Expected a value or expression (e.g., a literal, variable, or function call).");
+    }
     FAIL();
 }

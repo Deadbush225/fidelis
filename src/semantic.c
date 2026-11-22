@@ -1211,12 +1211,18 @@ static void analyzeEnsureStmt(SemanticAnalyzer *sa, const ParseNode *node) {
         }
     } else {
         Symbol *existing = lookupSymbol(sa->currentScope, nodeLexeme(nameNode));
-        if (existing == NULL || existing->kind != SYM_VAR) {
+        if (existing == NULL) {
             semError(sa, nameNode ? nameNode : node,
                      "Undeclared variable '%s' in 'ensure' statement.",
                      nodeLexeme(nameNode));
             targetType = makeErrorType();
+        } else if (existing->kind != SYM_VAR && existing->kind != SYM_PARAM) {
+            semError(sa, nameNode ? nameNode : node,
+                     "'%s' is not a variable and cannot be assigned in 'ensure'.",
+                     nodeLexeme(nameNode));
+            targetType = makeErrorType();
         } else {
+            existing->isUsed = true;
             targetType = existing->type;
             if (!isErrorType(targetType) && targetType.isNullable) {
                 semWarning(sa, nameNode,
@@ -1583,7 +1589,7 @@ static void analyzePrintStmt(SemanticAnalyzer *sa, const ParseNode *node) {
     const ParseNode *exprNode = firstMeaningfulAfter(node, "PRINT", 0);
     SemType t = analyzeExpression(sa, exprNode);
     if (!isErrorType(t) && t.base == TYPE_VOID) {
-        semError(sa, exprNode, "Cannot pass a void expression to print().");
+        semError(sa, exprNode, "Expression does not produce a printable value.");
     }
 }
 
