@@ -1,7 +1,7 @@
 #include "helper.h"
 #include <stdio.h>
 #include <string.h>
-
+#include <stdbool.h>
 /*
 escapedLexeme - Handles how the lexeme will be printed. If the loop encounters a
 special character, it will print the corresponding special character (e.g \n is
