@@ -1,294 +1,162 @@
-# Fidelis Lexer
+# Fidelis
 
-A complete C lexer implementing the full Fidelis programming language specification. The lexer uses a pure DFA-based design to scan source text and emit tokens for keywords, literals, operators, and comments.
+Fidelis is a programming language implemented in C. The command-line program
+processes `.fdls` source files through lexical analysis, parsing, semantic
+analysis, and—unless run in check mode—interpretation.
 
-## Architecture
+## Pipeline
 
-- `src/` — lexer implementation
-  - `main.c` — entry point that reads source files and prints tokens
-  - `lexer.c` — DFA tokenization engine
-- `include/` — public interfaces
-  - `lexer.h` — token types, token structure, and declarations
-- `samples/` — example inputs
-  - `test_features.swift` — default demo source
-  - `all_features.swift` — comprehensive feature showcase
-  - `escape_test.swift` — escape-sequence examples
-- `docs/lexer-design.md` — lexer state and design notes
+1. **Lexer** tokenizes the source and writes `outputs/symbol_table.txt`.
+2. **Parser** checks syntax and writes `outputs/parse_tree.txt`.
+3. **Semantic analyzer** checks declarations, names, types, scopes, function
+   calls, and context-sensitive rules. It writes
+   `outputs/semantic_report.txt`.
+4. **Interpreter** executes the program only if the first three phases pass.
 
-## Quick Start
-
-### Option 1: Use `make`
-
-```bash
-make
-./fidelis
-```
-
-### Option 2: Unix shell script
-
-```bash
-chmod +x compile.sh
-./compile.sh
-```
-
-### Option 3: Windows batch script
-
-```cmd
-compile.cmd
-```
-
-### Option 4: Compile directly with GCC
-
-#### Windows (PowerShell)
-```powershell
-gcc -Iinclude src\main.c src\lexer.c src\helper.c -o fidelis.exe
-.\fidelis.exe
-```
-
-#### macOS / Linux
-```bash
-gcc -Iinclude src/main.c src/lexer.c src/helper.c -o fidelis
-./fidelis
-```
-
-## Platform-specific instructions
-
-### Windows
-
-1. Open PowerShell in the project folder.
-2. Compile:
-
-```powershell
-gcc -Iinclude src\main.c src\lexer.c src\helper.c -o fidelis.exe
-```
-
-3. Run the default sample:
-
-```powershell
-.\fidelis.exe
-```
-
-4. Run a specific sample:
-
-```powershell
-.\fidelis.exe samples\test_features.swift
-```
-
-5. Or use the ready-made Windows helper script:
-
-```cmd
-compile.cmd
-```
-
-### macOS
-
-1. Open Terminal in the project folder.
-2. Compile:
-
-```bash
-gcc -Iinclude src/main.c src/lexer.c src/helper.c -o fidelis
-```
-
-3. Run the default sample:
-
-```bash
-./fidelis
-```
-
-4. Run a specific sample:
-
-```bash
-./fidelis samples/test_features.swift
-```
-
-5. Or run the Unix helper script:
-
-```bash
-chmod +x compile.sh
-./compile.sh
-```
-
-### Linux
-
-1. Open a shell in the project folder.
-2. Compile:
-
-```bash
-gcc -Iinclude src/main.c src/lexer.c src/helper.c -o fidelis
-```
-
-3. Run the default sample:
-
-```bash
-./fidelis
-```
-
-4. Run a specific sample:
-
-```bash
-./fidelis samples/test_features.swift
-```
-
-5. Or run the Unix helper script:
-
-```bash
-chmod +x compile.sh
-./compile.sh
-```
+The semantic analyzer consumes the parse tree; it does not execute the program.
+See [docs/semantic-design.md](docs/semantic-design.md) for its API, type and
+scope rules, diagnostics, and report details.
 
 ## Requirements
 
-- GCC or another C compiler supporting C11
-- `make` if you want to use the `make` workflow
-- A Unix shell for `compile.sh` or Windows Command Prompt for `compile.cmd`
+- GCC (or a compatible C compiler) available on `PATH`
+- A `.fdls` source file to run
 
-## Build
+## Build and run
+
+Run commands from the repository root. The program requires an input path; it
+does not select a default sample.
+
+### Windows (PowerShell)
+
+Build the full compiler and interpreter:
+
+```powershell
+.\compile.cmd
+```
+
+Run a sample through all phases, including semantic analysis and execution:
+
+```powershell
+.\fidelis.exe samples\basic\hello-world.fdls
+```
+
+Check a file through semantic analysis without executing it:
+
+```powershell
+.\fidelis.exe --check samples\basic\hello-world.fdls
+```
+
+### macOS and Linux
+
+Build using the helper script:
 
 ```bash
-make
+chmod +x compile.sh
+./compile.sh
 ```
 
-This produces a `fidelis` binary in the repository root.
-
-## Run
-
-### Default input file
+Run a sample through all phases:
 
 ```bash
-./fidelis
+./fidelis samples/basic/hello-world.fdls
 ```
 
-This reads `samples/test_features.swift`.
-
-### Custom input file
+Check a file without executing it:
 
 ```bash
-./fidelis samples/test_features.swift
+./fidelis --check samples/basic/hello-world.fdls
 ```
 
-### Build and run in one command
+### Compile directly with GCC
+
+Windows (PowerShell):
+
+```powershell
+gcc -Iinclude src\main.c src\lexer.c src\helper.c src\syntax.c src\parser_core.c src\semantic.c src\interpreter.c -o fidelis.exe
+```
+
+macOS / Linux:
 
 ```bash
-make run
+gcc -Iinclude src/main.c src/lexer.c src/helper.c src/syntax.c src/parser_core.c src/semantic.c src/interpreter.c -o fidelis
 ```
 
-## Clean
+## Semantic check mode
 
-```bash
-make clean
-```
+`--check` runs lexical, syntax, and semantic analysis, but skips interpretation.
+Semantic errors and warnings are printed to `stderr`; the process exits with
+status `0` when the checks pass and `1` when a phase fails. Check mode uses
+temporary files and does not produce the normal files in `outputs/`.
 
-## Complete Token Support
+Without `--check`, the analyzer writes its detailed diagnostics and scoped
+symbol-table report to `outputs/semantic_report.txt`. The lexer and parser
+outputs are written alongside it. These output paths are relative to the
+current working directory, so run the executable from the repository root.
 
-### Literals
-- Integer: `42`, `1234`
-- Float: `98.6`, `3.14`, `100.0`
-- String: `"hello world"` (whitespace is preserved)
-- Character: `'A'`, `'x'`, `'!'`, `'\n'`
-- Boolean: `true`, `false`
-
-### Keywords
-
-#### Data Types
-- `int`, `float`, `string`, `bool`, `char`
-
-#### Structural
-- `state`, `react`, `loop`
-
-#### Control Flow
-- `if`, `else`, `for`, `match`, `transition`, `ensure`
-
-#### I/O
-- `print`, `readLine`, `readInt`
-
-#### Modularity
-- `fn`, `return`
-
-#### System
-- `quit`, `sleep`
-
-#### Special Values
-- `true`, `false`, `null`
-
-### Noise Words (discarded automatically)
-- `is`, `do`, `to`
-
-These are recognized and filtered by the lexer; they do not appear in the token stream.
-
-### Operators
-
-#### Arithmetic
-- `+`, `-`, `*`, `/`, `%`, `\`, `^`
-
-#### Relational
-- `==`, `!=`, `<`, `>`, `<=`, `>=`
-
-#### Logical
-- `!`, `&&`, `||`
-
-#### Assignment
-- `=`, `+=`, `-=`, `*=`, `/=`, `%=`
-
-#### Special
-- `|>` (pipeline)
-- `->` (arrow)
-- `?` (optional-type suffix)
-- `.` (intrinsic property operator)
-
-### Delimiters and brackets
-- `;`, `,`, `:`
-- `(`, `)`, `{`, `}`, `[`, `]`
-
-### Comments
-
-#### Single-line
-```c
-// This comment extends to end of line
-```
-
-#### Multi-line block
-```c
-/* This comment can span
-   multiple lines and is
-   terminated only by the closing */
-```
-
-Comments are returned as `LINE_COMMENT` and `BLOCK_COMMENT` tokens; the caller decides whether to display or ignore them.
-
-## Output Format
-
-The lexer prints each token in a fixed-width format:
-
-```text
-Token Type: FLOAT_LITERAL       | Lexeme: 98.6
-Token Type: IDENTIFIER          | Lexeme: temperature
-Token Type: ASSIGN              | Lexeme: =
-Token Type: INT_LITERAL         | Lexeme: 42
-```
+Programs that pass semantic analysis are executed immediately in normal mode;
+interactive samples may prompt for input. Use `--check` when you only want to
+validate a program.
 
 ## Samples
 
-See `Fidelis.md` for the full language specification and examples.
+See [samples/ListOfSample.md](samples/ListOfSample.md) for the available
+programs and what each demonstrates. [Fidelis.md](Fidelis.md) contains the
+language specification and additional examples.
 
-To test the lexer on the bundled sample source:
+## Language overview
 
-```bash
-./fidelis samples/test_features.fdls
+The lexer recognizes the following language constructs.
+
+### Literals and types
+
+- Primitive types: `int`, `float`, `string`, `bool`, `char`
+- Integer, float, string, character, and boolean literals
+- Nullable types using `?`, plus array types and array literals
+- `null`
+
+### Keywords and constructs
+
+- Structural: `state`, `react`, `loop`
+- Control flow: `if`, `else`, `for`, `match`, `transition`, `ensure`
+- I/O: `print`, `readLine`, `readInt`
+- Functions: `fn`, `return`
+- System: `quit`, `sleep`
+- Noise words `is`, `do`, `to` are discarded by the lexer
+
+### Operators and delimiters
+
+- Arithmetic: `+`, `-`, `*`, `/`, `%`, `\`, `^`
+- Relational: `==`, `!=`, `<`, `>`, `<=`, `>=`
+- Logical: `!`, `&&`, `||`
+- Assignment: `=`, `+=`, `-=`, `*=`, `/=`, `%=`
+- Other: `|>` (pipeline), `->` (arrow), `?` (nullable-type suffix), `.`
+- Delimiters: `;`, `,`, `:`, parentheses, braces, and brackets
+
+### Comments
+
+```fdls
+// Single-line comment
+
+/* Multi-line
+   block comment */
 ```
 
-## Notes
+## Project layout
 
-- The lexer stores lexemes up to 255 characters before truncating
-- Unrecognized characters produce `TOKEN_ERROR`
-- Unterminated strings or block comments produce descriptive error tokens
-- Whitespace is ignored as a separator
-- The lexer follows a pure DFA architecture for efficient scanning
+- `src/` — compiler and interpreter implementation
+- `include/` — public C interfaces
+- `samples/` — `.fdls` sample programs
+- `docs/` — lexer, parser, interpreter, and semantic analyzer design notes
+- `outputs/` — reports generated by a normal run
+- `compile.cmd` — Windows build script
+- `compile.sh` — macOS/Linux build script
 
-## Script files
+## Lexer notes
 
-The project includes helper scripts for compiling on each platform:
-
-- `compile.sh` — Unix/macOS build helper
-- `compile.cmd` — Windows build helper
-
-The scripts compile the same set of source files as `make` and produce the `fidelis` binary or `fidelis.exe` output.
+- Lexemes are stored up to 255 characters before truncation.
+- Unrecognized characters and unterminated strings or block comments produce
+  descriptive error tokens.
+- Whitespace is ignored as a token separator.
+- The lexer uses a DFA-based scanning design; see
+  [docs/lexer-design.md](docs/lexer-design.md).
