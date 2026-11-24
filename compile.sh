@@ -13,7 +13,9 @@ gcc \
   "$ROOT_DIR/src/helper.c" \
   "$ROOT_DIR/src/syntax.c" \
   "$ROOT_DIR/src/parser_core.c" \
+  "$ROOT_DIR/src/semantic.c" \
+  "$ROOT_DIR/src/interpreter.c" \
   -o "$OUT"
 
 printf 'Build succeeded: %s\n' "$OUT"
-printf 'Run with: ./fidelis\n'
+printf 'Run with: ./fidelis <input.fdls>\n'
