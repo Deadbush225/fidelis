@@ -1,57 +1,171 @@
-// 1. Missing semicolon (Line-End Semicolon Recovery)
+// ============================================================================
+// FIDELIS TEST SUITE: ALL SYNTAX ERROR MESSAGES
+// Covers all 9 syntax error categories from Group 3 - PPL Draft Proposal.docx
+// ============================================================================
+
+// --- 1. Missing Terminator ---
+
+// Expected ';' after variable declaration.
 int a = 10
 
-// 2. Missing value / expression
-int b = ;
+// Expected ';' after statement.
+print("Hello")
 
-// 3. Missing variable name after type
-int = 5;
+// Expected ';' after match case statement.
+match x {"1" -> print("One")}
 
-// 4. Missing '=' or ';' in declaration
-int c 10;
+// --- 2. Missing Value or Expression ---
 
-// 5. Missing assignment operator
-a 20;
+// Missing value or expression. (empty right-hand side of assignment)
+int y = ;
 
-// 6. Unclosed '(' in if condition
-if (a > 5 {
-    print(a);
-}
+// Missing value or expression. (empty print() argument)
+print();
 
-// 7. Unclosed '(' in print statement
+// Expected a value or expression (e.g., a literal, variable, or function call).
+int z = else;
+
+// --- 3. Unclosed / Missing Delimiters ---
+
+// Unclosed '(' — expected matching ')'.
+int a = (1 + 2;
+
+// Expected ')' after if condition. Syntax: if (condition) { ... }
+if (x > 5 { print(x); }
+
+// Expected ')' to close the print() call.
 print("Hello";
 
-// 8. Unclosed '[' in array type
-[int scores = [1, 2, 3];
+// Unclosed '[' — expected matching ']'.
+[int] nums = [1, 2;
 
-// 9. Unclosed '[' in array literal
-[int] nums = [1, 2, 3;
+// Expected ']' to close array type.
+[int scores = [1, 2];
 
-// 10. Missing '->' in match case
-match a {
-    1 print("One");
-}
+// Expected ']' after array index. Syntax: arrayName[index] = value;
+scores[0 = 95;
 
-// 11. Empty match statement
-match a {
-}
+// Expected '{' to start a block.
+state Idle print("Hi");
 
-// 12. Missing 'else' in ensure statement
-int x = ensure a {
-    quit;
-}
+// Expected '{' to start match cases. Syntax: match expr { case -> action; }
+match x 1 -> quit; }
 
-// 13. Missing ':' before return type in fn
-fn bad(int n) int {
-    return n;
-}
+// Expected '(' after 'if'. Syntax: if (condition) { ... }
+if x > 5 { print(x); }
 
-// 14. Missing function name after pipeline '|>'
+// Expected '(' after 'print'. Syntax: print(expression);
+print "Hello";
+
+// Expected '(' after 'sleep'. Usage: sleep(milliseconds);
+sleep 1000;
+
+// Expected '(' after built-in input function. Use readLine() or readInt().
+int? x = readInt;
+
+// Expected '(' after function name in pipeline.
+"hi" |> print;
+
+// --- 4. Declaration Errors ---
+
+// Expected a variable name after type.
+int = 5;
+
+// Expected '=' or ';' after variable name in declaration.
+int c 10;
+
+// Expected a function name after 'fn'.
+fn (int n) : int {}
+
+// Expected ':' before return type.
+fn bad(int n) int {}
+
+// Expected a type keyword (int, float, string, bool, char) or an array type ([type]).
+fn bad(n) : int {}
+
+// Expected a state name (identifier) after 'state'. Syntax: state StateName { ... }
+state { print("Hi"); }
+
+// Expected a variable name inside react().
+react () { print(x); }
+
+// Expected a parameter name after type.
+fn add(int) : int { return 0; }
+
+// Expected an integer size after ',' in fixed-size array type.
+[int, ] scores;
+
+// --- 5. Assignment Errors ---
+
+// Expected an assignment operator (=, +=, -=, *=, /=, %=).
+x 20;
+
+// Expected an identifier on the left side of assignment.
+for (int i = 0; i < 5; 1) {}
+
+// --- 6. Control Flow and Null-Safety Errors ---
+
+// Expected 'else' in ensure statement.
+int x = ensure y { quit; }
+
+// Expected '->' after match case pattern. Syntax: pattern -> action;
+match x { 1 print("One"); }
+
+// Expected a number after '+' or '-' in match case.
+match x { + -> quit; }
+
+// Expected a match pattern (literal or '_') before '->'.
+match x { ; -> quit; }
+
+// Match statement must have at least one case.
+match x {}
+
+// Expected a state name after 'transition'.
+transition to ;
+
+// Expected an identifier or '(' after 'match'.
+match { 1 -> quit; }
+
+// --- 7. Loop Header Errors ---
+
+// Expected a loop variable name after the type in for loop initialization.
+for (int = 0; i < 3; i += 1) {}
+
+// Expected '=' after the loop variable in for loop initialization.
+for (int i 0; i < 3; i += 1) {}
+
+// Expected ';' after for loop initialization.
+for (int i = 0 i < 3; i += 1) {}
+
+// Expected ';' after for loop condition.
+for (int i = 0; i < 3 i += 1) {}
+
+// Expected ')' after for loop header.
+for (int i = 0; i < 3; i += 1 {}
+
+// --- 8. Expression and Pipeline Errors ---
+
+// Expected a function name or 'print' after '|>' pipeline operator.
 "hello" |> 123;
 
-// 15. Unexpected top-level token
+// Expected ':' in ternary expression.
+string s = ok ? "Yes";
+
+// Expected a property name after '.'.
+int n = scores.;
+
+// --- 9. Unexpected Token ---
+
+// Unexpected token. (leading '+' at start of statement)
 + 5;
 
-// 16. Unclosed '{' block (leave at the bottom so it catches at EOF)
-state Broken {
-    print("Missing closing brace");
+// Unexpected token. (stray closing brace '}')
+}
+
+// --- Unclosed Block Delimiters (must remain at EOF so no later '}' closes them) ---
+
+// Unclosed '{' — expected matching '}'.
+state Idle { print("Hi");
+
+// Expected '}' to close match statement.
+match x { 1 -> quit;
