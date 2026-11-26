@@ -1,0 +1,111 @@
+// 1. DECLARATION STATEMENTS (Primitives, Nullable, Arrays, Functions, States, React)
+int roomTemp = 22;
+int targetTemp = 24;
+int baseTemp = 18;
+float humidity = 55.5;
+char mode = 'A';
+bool lightsOn = true;
+string status = "OK";
+int? rawPin = null;
+
+[int] scores = [90, 85, 88];
+[int, 5] slots;
+[int, 5] ratings = [10, 20, 30];
+
+fn square(int n) : int {
+    return n * n;
+}
+
+fn formatStatus(bool active) : string {
+    return active ? "ACTIVE" : "INACTIVE";
+}
+
+react (roomTemp) {
+    print("Temperature changed to: " + roomTemp);
+}
+
+// 2. INPUT STATEMENTS
+string? userName = readLine();
+int? pinInput = readInt();
+
+// 3. OUTPUT STATEMENTS (String, Variable, Concatenation, Custom Endline)
+print("--- FIDELIS SYNTAX CHECK ---");
+print(roomTemp);
+print("Current temp: " + roomTemp + "C");
+print("Enter PIN: ", "");
+
+// 4. ASSIGNMENT STATEMENTS (Literal, Variable, Expression, Compound, Indexed)
+lightsOn = false;
+roomTemp = targetTemp;
+roomTemp = baseTemp + 5;
+roomTemp += 1;
+scores[0] = 95;
+
+// 5. EXPRESSION PRECEDENCE (Unary, Exponent, Mult, Add, Rel, Eq, Logic, Ternary, Postfix)
+int calc = -2 ^ 3 + scores[0] * scores.length;
+string msg = !lightsOn && roomTemp == 24 || false ? "Reset" : "Keep";
+
+// 6. CONDITION STATEMENTS (If, If-Else, If-Else If-Else, Ensure, Match)
+if (roomTemp > 30) {
+    print("Hot");
+}
+
+if (lightsOn) {
+    print("Lights ON");
+} else {
+    print("Lights OFF");
+}
+
+if (roomTemp > 30) {
+    print("Hot");
+} else if (roomTemp < 16) {
+    print("Cold");
+} else {
+    print("Normal");
+}
+
+// 7. ITERATIVE STATEMENTS (For, Nested For)
+for (int i = 0; i < scores.length; i += 1) {
+    print(scores[i]);
+}
+
+for (int x = 1; x <= 2; x += 1) {
+    for (int y = 1; y <= 2; y += 1) {
+        print(x + y);
+    }
+}
+
+// 8. EXPRESSION STATEMENTS (Function Call & Pipeline)
+square(4);
+"hello" |> print();
+
+// 9. SYSTEM STATEMENTS
+sleep(100);
+
+// 10. STATE MACHINE, ENSURE, MATCH, LOOP, TRANSITION & QUIT
+state Idle {
+    int validPin = ensure pinInput else {
+        print("Invalid PIN");
+        quit;
+    }
+
+    int safeTemp = 20;
+    safeTemp = ensure rawPin else {
+        transition to Done;
+    }
+
+    match validPin {
+        1234 -> transition to Done;
+        _ -> {
+            print("Unknown PIN");
+            transition to Done;
+        }
+    }
+}
+
+state Done {
+    loop {
+        print("Finished");
+        quit;
+    }
+}

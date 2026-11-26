@@ -1,0 +1,57 @@
+// 1. Missing semicolon (Line-End Semicolon Recovery)
+int a = 10
+
+// 2. Missing value / expression
+int b = ;
+
+// 3. Missing variable name after type
+int = 5;
+
+// 4. Missing '=' or ';' in declaration
+int c 10;
+
+// 5. Missing assignment operator
+a 20;
+
+// 6. Unclosed '(' in if condition
+if (a > 5 {
+    print(a);
+}
+
+// 7. Unclosed '(' in print statement
+print("Hello";
+
+// 8. Unclosed '[' in array type
+[int scores = [1, 2, 3];
+
+// 9. Unclosed '[' in array literal
+[int] nums = [1, 2, 3;
+
+// 10. Missing '->' in match case
+match a {
+    1 print("One");
+}
+
+// 11. Empty match statement
+match a {
+}
+
+// 12. Missing 'else' in ensure statement
+int x = ensure a {
+    quit;
+}
+
+// 13. Missing ':' before return type in fn
+fn bad(int n) int {
+    return n;
+}
+
+// 14. Missing function name after pipeline '|>'
+"hello" |> 123;
+
+// 15. Unexpected top-level token
++ 5;
+
+// 16. Unclosed '{' block (leave at the bottom so it catches at EOF)
+state Broken {
+    print("Missing closing brace");
