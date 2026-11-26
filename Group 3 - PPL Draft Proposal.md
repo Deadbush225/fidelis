@@ -97,7 +97,7 @@ Performs fundamental mathematical calculations to manipulate numerical data and 
 | / | DIVISION | Divides the first value by the second to return the exact quotient. |
 | % | MODULO | Divides two values and returns only the remainder of the operation. |
 | \\ | INTEGER\_DIVISION | Divides two values and drops the decimal to return a whole number. |
-| ^ | EXPONENT | **Exponent** - Raises a base value to the power of a specified exponent. |
+| ^ | EXPONENT | Raises a base value to the power of a specified exponent. |
 
 #### **Boolean**
 
