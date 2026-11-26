@@ -106,30 +106,6 @@ static bool expectToken(Parser *parser, const char *expected, const char *errorM
     return false;
 }
 
-static bool parseLeftAssocTail(
-    Parser *parser,
-    size_t startIdx,
-    bool (*parseOperand)(Parser *),
-    const char *ops[],
-    int opCount,
-    const char *label
-) {
-    if (parser == NULL) return false;
-    if (!parser->hasMoreTokens) return true;
-    ParseNode *_prevNode = parser->currentNode;
-
-    bool matchedOperator = false;
-    while (checkTokenAny(parser, ops, opCount)) {
-        matchedOperator = true;
-        advanceToken(parser);
-        REQUIRE(parseOperand(parser));
-    }
-    if (matchedOperator) {
-        wrapChildrenFrom(parser->currentNode, startIdx, label);
-    }
-    PASS();
-}
-
 static bool parseLeftAssoc(
     Parser *parser,
     bool (*parseOperand)(Parser *),
@@ -139,50 +115,17 @@ static bool parseLeftAssoc(
 ) {
     GUARD(parser);
     size_t startIdx = parser->currentNode->childCount;
+    bool matchedOperator = false;
     REQUIRE(parseOperand(parser));
-    RETURN(parseLeftAssocTail(parser, startIdx, parseOperand, ops, opCount, label));
-}
-
-// Wraps parent->children[startIdx .. endIdx - 1] into a single child node
-// at parent->children[startIdx], preserving any trailing siblings at [endIdx ..].
-static ParseNode *wrapChildrenRange(ParseNode *parent, size_t startIdx, size_t endIdx, const char *label) {
-    if (parent == NULL || startIdx > endIdx || endIdx > parent->childCount) return NULL;
-    if (endIdx == parent->childCount) {
-        return wrapChildrenFrom(parent, startIdx, label);
+    while (checkTokenAny(parser, ops, opCount)) {
+        matchedOperator = true;
+        advanceToken(parser);
+        REQUIRE(parseOperand(parser));
     }
-
-    size_t movedCount = endIdx - startIdx;
-    size_t trailingCount = parent->childCount - endIdx;
-
-    ParseNode *wrapper = addChildNode(parent, label);
-    if (wrapper == NULL) return NULL;
-
-    // addChildNode appended wrapper at the end; remove that temporary slot before rewriting.
-    parent->childCount--;
-
-    if (movedCount > 0) {
-        wrapper->children = (ParseNode **)calloc(movedCount, sizeof(ParseNode *));
-        if (wrapper->children == NULL) {
-            freeParseTree(wrapper);
-            return NULL;
-        }
-        for (size_t i = 0; i < movedCount; i++) {
-            wrapper->children[i] = parent->children[startIdx + i];
-        }
-        wrapper->childCount = movedCount;
-        wrapper->childCapacity = movedCount;
-        wrapper->line = wrapper->children[0]->line;
-        wrapper->column = wrapper->children[0]->column;
+    if (matchedOperator) {
+        wrapChildrenFrom(parser->currentNode, startIdx, label);
     }
-
-    parent->children[startIdx] = wrapper;
-    if (trailingCount > 0) {
-        memmove(&parent->children[startIdx + 1],
-                &parent->children[endIdx],
-                trailingCount * sizeof(ParseNode *));
-    }
-    parent->childCount = startIdx + 1 + trailingCount;
-    return wrapper;
+    PASS();
 }
 
 // Expect a terminal, log its lexeme BEFORE advancing (fixes the double-advance bug)
@@ -199,11 +142,6 @@ static bool expectTokenLogged(Parser *parser, const char *expected, const char *
 // Left-associative binary precedence level: EBNF  Next, { (op1 | op2), Next }
 #define LEFT_ASSOC(operandFn, label, ...) \
     parseLeftAssoc(parser, (operandFn), TOKEN_LIST(__VA_ARGS__), TOKEN_COUNT(__VA_ARGS__), (label))
-
-#define LEFT_ASSOC_TAIL(startIdx, operandFn, label, ...) \
-    parseLeftAssocTail(parser, (startIdx), (operandFn), TOKEN_LIST(__VA_ARGS__), TOKEN_COUNT(__VA_ARGS__), (label))
-
-static bool parseExpressionTail(Parser *parser, size_t startIdx);
 
 static bool expectSemicolon(Parser *parser, const char *errMsg, const char *ctx) {
     if (matchToken(parser, "SEMICOLON")) {
@@ -650,112 +588,92 @@ bool parseAssignment(Parser *parser) {
     PASS();
 }
 
-// Shared body for statements starting with IDENTIFIER:
-//   1. x = ensure expr else { ... }      -> BlockStatement  -> EnsureStmt (when allowEnsure)
-//   2. x = expr / x[i] = expr / x += 1   -> SimpleStatement -> Assignment
-//   3. func(args) / x |> print() / expr  -> SimpleStatement -> Expression (Call, Pipeline, etc.)
-static bool parseIdentBody(Parser *parser, ParseNode *kindNode, bool allowEnsure, bool *outIsEnsure) {
-    GUARD(parser);
-    if (outIsEnsure != NULL) *outIsEnsure = false;
-
-    size_t startIdx = parser->currentNode->childCount;
-    EXPECT_LOG("IDENTIFIER", "Target", "Expected an identifier.");
-
-    // Simple assignment or identifier-led `ensure` statement: x = ...
-    if (OPT("ASSIGNMENT")) {
-        if (allowEnsure && OPT("ENSURE")) {
-            if (kindNode != NULL) {
-                strncpy(kindNode->label, "BlockStatement", sizeof(kindNode->label) - 1);
-                kindNode->label[sizeof(kindNode->label) - 1] = '\0';
-            }
-            ParseNode *ensureNode = wrapChildrenFrom(parser->currentNode, startIdx, "EnsureStmt");
-            if (ensureNode != NULL) parser->currentNode = ensureNode;
-            REQUIRE(parseExpression(parser));
-            EXPECT("ELSE", "Expected 'else' in ensure statement.");
-            REQUIRE(parseBlock(parser));
-            if (outIsEnsure != NULL) *outIsEnsure = true;
-            PASS();
-        }
-
-        ParseNode *assignNode = wrapChildrenFrom(parser->currentNode, startIdx, "Assignment");
-        if (assignNode != NULL) parser->currentNode = assignNode;
-        REQUIRE(parseExpression(parser));
-        PASS();
-    }
-
-    // Compound assignment: x += expr, x -= expr, ...
-    if (CHECK_ANY("ADD_ASSIGN", "SUBTRACT_ASSIGN", "MULTIPLY_ASSIGN",
-                  "DIVIDE_ASSIGN", "MODULO_ASSIGN")) {
-        advanceToken(parser);
-        ParseNode *assignNode = wrapChildrenFrom(parser->currentNode, startIdx, "Assignment");
-        if (assignNode != NULL) parser->currentNode = assignNode;
-        REQUIRE(parseExpression(parser));
-        PASS();
-    }
-
-    // Indexed form: could be `arr[i] = expr` (Assignment) or `arr[i] |> print()` (Expression)
-    if (checkToken(parser, "LBRACKET")) {
-        size_t bracketSizes[64];
-        size_t bracketCount = 0;
-
-        while (bracketCount < 64 && OPT("LBRACKET")) {
-            size_t beforeBracket = (parser->currentNode->childCount > 0)
-                                       ? (parser->currentNode->childCount - 1)
-                                       : 0;
-            SymbolEntry openBracket = parser->prevToken;
-            REQUIRE(parseExpression(parser));
-            EXPECT_CLOSE("RBRACKET", openBracket, "Expected ']' after array index.");
-            size_t afterBracket = parser->currentNode->childCount;
-            bracketSizes[bracketCount++] = (afterBracket >= beforeBracket)
-                                               ? (afterBracket - beforeBracket)
-                                               : 0;
-        }
-
-        if (CHECK_ANY("ASSIGNMENT", "ADD_ASSIGN", "SUBTRACT_ASSIGN",
-                      "MULTIPLY_ASSIGN", "DIVIDE_ASSIGN", "MODULO_ASSIGN")) {
-            advanceToken(parser);
-            ParseNode *assignNode = wrapChildrenFrom(parser->currentNode, startIdx, "Assignment");
-            if (assignNode != NULL) parser->currentNode = assignNode;
-            REQUIRE(parseExpression(parser));
-            PASS();
-        }
-
-        // Not followed by an assignment operator: fold brackets into nested ArrayAccess nodes
-        // and continue parsing any remaining expression tail (e.g., `arr[0] |> print()`).
-        for (size_t k = 0; k < bracketCount; k++) {
-            size_t endIdx = startIdx + 1 + bracketSizes[k];
-            if (bracketSizes[k] > 0 && endIdx <= parser->currentNode->childCount) {
-                wrapChildrenRange(parser->currentNode, startIdx, endIdx, "ArrayAccess");
-            }
-        }
-        RETURN(parseExpressionTail(parser, startIdx));
-    }
-
-    // Any other identifier-led expression statement: func(args), x |> print(), x + 1, x.length, etc.
-    RETURN(parseExpressionTail(parser, startIdx));
-}
-
-// Used by parseSimpleStatement (e.g., single-line match cases): handles calls, assignments, and exprs
+// Used by parseSimpleStatement: handles `func(args)`, `var |> fn()`, and `var = expr`
+static bool parsePipelineStages(Parser *parser);
 bool parseIdentStmt(Parser *parser) {
     GUARD(parser);
-    RETURN(parseIdentBody(parser, parser->currentNode, false, NULL));
+    size_t startIdx = parser->currentNode->childCount;
+    NODE("Assignment");
+    ParseNode *stmtNode = parser->currentNode;
+    EXPECT_LOG("IDENTIFIER", "Target", "Expected an identifier.");
+    if (OPT("LPAREN")) {
+        SymbolEntry openParen = parser->prevToken;
+        strncpy(stmtNode->label, "FunctionCall", sizeof(stmtNode->label) - 1);
+        stmtNode->label[sizeof(stmtNode->label) - 1] = '\0';
+        if (!checkToken(parser, "RPAREN")) REQUIRE(parseArgList(parser));
+        EXPECT_CLOSE("RPAREN", openParen, "Expected ')' after function call arguments.");
+        if (checkToken(parser, "PIPELINE")) {
+            parser->currentNode = _prevNode;
+            REQUIRE(parsePipelineStages(parser));
+            wrapChildrenFrom(parser->currentNode, startIdx, "PipelineExpr");
+        }
+        PASS();
+    }
+    if (checkToken(parser, "PIPELINE")) {
+        strncpy(stmtNode->label, "PipelineExpr", sizeof(stmtNode->label) - 1);
+        stmtNode->label[sizeof(stmtNode->label) - 1] = '\0';
+        RETURN(parsePipelineStages(parser));
+    }
+    RETURN(parseAssignmentTail(parser));
 }
 
-// Handles top-level/block statements starting with IDENTIFIER:
-//   1. func(args); / x |> print(); / expr; -> SimpleStatement -> Expression
-//   2. x = ensure expr else { ... }        -> BlockStatement  -> EnsureStmt (no ';')
-//   3. x = expr; / x[i] = expr; / x += 1;  -> SimpleStatement -> Assignment
+// Handles statements starting with IDENTIFIER:
+//   1. func(args); / x |> fn();          -> SimpleStatement -> FunctionCall / PipelineExpr
+//   2. x = ensure expr else { ... }      -> BlockStatement  -> EnsureStmt (no ';')
+//   3. x = expr; / x[i] = expr; / x+=1;  -> SimpleStatement -> Assignment
 static bool parseIdentOrEnsureStmt(Parser *parser) {
     GUARD(parser);
     NODE("SimpleStatement");
     ParseNode *kindNode = parser->currentNode;
+    size_t stmtIdx = kindNode->childCount;
+    NODE("Assignment");
+    ParseNode *stmtNode = parser->currentNode;
 
-    bool isEnsure = false;
-    REQUIRE(parseIdentBody(parser, kindNode, true, &isEnsure));
-    if (isEnsure) {
+    EXPECT_LOG("IDENTIFIER", "Target", "Expected an identifier.");
+
+    if (OPT("LPAREN")) {
+        SymbolEntry openParen = parser->prevToken;
+        strncpy(stmtNode->label, "FunctionCall", sizeof(stmtNode->label) - 1);
+        stmtNode->label[sizeof(stmtNode->label) - 1] = '\0';
+        if (!checkToken(parser, "RPAREN")) REQUIRE(parseArgList(parser));
+        EXPECT_CLOSE("RPAREN", openParen, "Expected ')' after function call arguments.");
+        if (checkToken(parser, "PIPELINE")) {
+            parser->currentNode = kindNode;
+            REQUIRE(parsePipelineStages(parser));
+            wrapChildrenFrom(kindNode, stmtIdx, "PipelineExpr");
+        }
+        parser->currentNode = _prevNode;
+        EXPECT_SEMI("Expected ';' after statement.", "statement termination");
         PASS();
     }
 
+    if (checkToken(parser, "PIPELINE")) {
+        strncpy(stmtNode->label, "PipelineExpr", sizeof(stmtNode->label) - 1);
+        stmtNode->label[sizeof(stmtNode->label) - 1] = '\0';
+        REQUIRE(parsePipelineStages(parser));
+        parser->currentNode = _prevNode;
+        EXPECT_SEMI("Expected ';' after statement.", "statement termination");
+        PASS();
+    }
+
+    if (OPT("ASSIGNMENT")) {
+        if (OPT("ENSURE")) {
+            strncpy(kindNode->label, "BlockStatement", sizeof(kindNode->label) - 1);
+            kindNode->label[sizeof(kindNode->label) - 1] = '\0';
+            strncpy(stmtNode->label, "EnsureStmt", sizeof(stmtNode->label) - 1);
+            stmtNode->label[sizeof(stmtNode->label) - 1] = '\0';
+            REQUIRE(parseExpression(parser));
+            EXPECT("ELSE", "Expected 'else' in ensure statement.");
+            RETURN(parseBlock(parser));
+        }
+
+        REQUIRE(parseExpression(parser));
+        parser->currentNode = _prevNode;
+        EXPECT_SEMI("Expected ';' after statement.", "statement termination");
+        PASS();
+    }
+
+    REQUIRE(parseAssignmentTail(parser));
     parser->currentNode = _prevNode;
     EXPECT_SEMI("Expected ';' after statement.", "statement termination");
     PASS();
@@ -1022,14 +940,9 @@ bool parseExpression(Parser *parser) {
     return parsePipelineExpr(parser);
 }
 
-static bool parsePipelineTail(Parser *parser, size_t startIdx) {
-    if (parser == NULL) return false;
-    if (!parser->hasMoreTokens) return true;
-    ParseNode *_prevNode = parser->currentNode;
-
-    bool matchedOperator = false;
+static bool parsePipelineStages(Parser *parser) {
+    GUARD(parser);
     while (OPT("PIPELINE")) {
-        matchedOperator = true;
         ParseNode *pipeParent = parser->currentNode;
         NODE(checkToken(parser, "PRINT") ? "PrintStmt" : "FunctionCall");
 
@@ -1040,15 +953,13 @@ static bool parsePipelineTail(Parser *parser, size_t startIdx) {
             parser->currentNode = pipeParent;
             FAIL();
         }
-
+        
         SymbolEntry openParen = parser->currentToken;
         EXPECT("LPAREN", "Expected '(' after function name in pipeline.");
         if (!checkToken(parser, "RPAREN")) REQUIRE(parseArgList(parser));
         EXPECT_CLOSE("RPAREN", openParen, "Expected ')' after pipeline function arguments.");
         parser->currentNode = pipeParent;
     }
-
-    if (matchedOperator) wrapChildrenFrom(parser->currentNode, startIdx, "PipelineExpr");
     PASS();
 }
 
@@ -1056,7 +967,12 @@ bool parsePipelineExpr(Parser *parser) {
     GUARD(parser);
     size_t startIdx = parser->currentNode->childCount;
     REQUIRE(parseTernaryExpr(parser));
-    RETURN(parsePipelineTail(parser, startIdx));
+
+    if (checkToken(parser, "PIPELINE")) {
+        REQUIRE(parsePipelineStages(parser));
+        wrapChildrenFrom(parser->currentNode, startIdx, "PipelineExpr");
+    }
+    PASS();
 }
 
 // --------------------------------------------------------------------------
@@ -1166,10 +1082,10 @@ bool parseExponentExpr(Parser *parser) {
 // Level 1.5: Postfix Access (left-to-right)
 // PostfixExpr = PrimaryExpr, { "[", Expression, "]" | ".", Identifier | "(", [ ArgList ], ")" } ;
 // --------------------------------------------------------------------------
-static bool parsePostfixTail(Parser *parser, size_t startIdx) {
-    if (parser == NULL) return false;
-    if (!parser->hasMoreTokens) return true;
-    ParseNode *_prevNode = parser->currentNode;
+static bool parsePostfixExpr(Parser *parser) {
+    GUARD(parser);
+    size_t startIdx = parser->currentNode->childCount;
+    REQUIRE(parsePrimaryExpr(parser));
 
     while (CHECK_ANY("LPAREN", "LBRACKET", "DOT")) {
         if (OPT("LPAREN")) {
@@ -1187,67 +1103,6 @@ static bool parsePostfixTail(Parser *parser, size_t startIdx) {
             wrapChildrenFrom(parser->currentNode, startIdx, "PropertyAccess");
         }
     }
-
-    PASS();
-}
-
-static bool parsePostfixExpr(Parser *parser) {
-    GUARD(parser);
-    size_t startIdx = parser->currentNode->childCount;
-    REQUIRE(parsePrimaryExpr(parser));
-    RETURN(parsePostfixTail(parser, startIdx));
-}
-
-// Continues parsing any remaining expression operators (Levels 1.5 -> 11)
-// after the leading PrimaryExpr at startIdx has already been parsed.
-static bool parseExpressionTail(Parser *parser, size_t startIdx) {
-    if (parser == NULL) return false;
-    if (!parser->hasMoreTokens) return true;
-    ParseNode *_prevNode = parser->currentNode;
-
-    // Level 1.5: Postfix ((), [], .)
-    REQUIRE(parsePostfixTail(parser, startIdx));
-
-    // Level 2: Exponent (right-to-left)
-    if (OPT("EXPONENT")) {
-        REQUIRE(parseExponentExpr(parser));
-        wrapChildrenFrom(parser->currentNode, startIdx, "ExponentExpr");
-    }
-
-    // Level 4: Multiplicative
-    REQUIRE(LEFT_ASSOC_TAIL(startIdx, parseUnaryExpr, "MultiplicativeExpr",
-                            "MULTIPLICATION", "DIVISION", "INTEGER_DIVISION", "MODULO"));
-
-    // Level 5: Additive
-    REQUIRE(LEFT_ASSOC_TAIL(startIdx, parseMultiplicativeExpr, "AdditiveExpr",
-                            "ADDITION", "SUBTRACTION"));
-
-    // Level 6: Relational
-    REQUIRE(LEFT_ASSOC_TAIL(startIdx, parseAdditiveExpr, "RelationalExpr",
-                            "LESS_THAN", "GREATER_THAN", "LESS_EQUAL", "GREATER_EQUAL"));
-
-    // Level 7: Equality
-    REQUIRE(LEFT_ASSOC_TAIL(startIdx, parseRelationalExpr, "EqualityExpr",
-                            "EQUALITY", "INEQUALITY"));
-
-    // Level 8: Logical AND
-    REQUIRE(LEFT_ASSOC_TAIL(startIdx, parseEqualityExpr, "LogicalAndExpr",
-                            "LOGICAL_AND"));
-
-    // Level 9: Logical OR
-    REQUIRE(LEFT_ASSOC_TAIL(startIdx, parseLogicalAndExpr, "LogicalOrExpr",
-                            "LOGICAL_OR"));
-
-    // Level 10: Ternary (right-to-left)
-    if (OPT("QUESTION")) {
-        REQUIRE(parseExpression(parser));
-        EXPECT("COLON", "Expected ':' in ternary expression.");
-        REQUIRE(parseTernaryExpr(parser));
-        wrapChildrenFrom(parser->currentNode, startIdx, "TernaryExpr");
-    }
-
-    // Level 11: Pipeline (left-to-right)
-    REQUIRE(parsePipelineTail(parser, startIdx));
 
     PASS();
 }
