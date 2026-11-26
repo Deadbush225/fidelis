@@ -274,6 +274,16 @@ EnsureStmt = Type, Identifier, ["is"], "=", "ensure",
 The parser input reader currently removes noise-word tokens, so the optional
 `is` spelling is not actually consumed by a grammar production.
 
+Fixed-size arrays use a comma in the type brackets:
+
+```ebnf
+Type = "[", Type, [",", INT_LITERAL], "]", ["?"] ;
+```
+
+For example, `[int, 10] values;` declares an array with a fixed capacity of
+10. The declaration form without `=` is accepted by the parser; the semantic
+analyzer requires an initializer for every other declaration.
+
 ## Statement dispatch
 
 At the start of a statement, the parser:
@@ -329,8 +339,9 @@ Primary expressions support:
 
 Pipeline expressions accept an identifier or the `print` keyword after `|>`,
 require a parenthesized argument list, and add `FunctionCall` nodes.
-This is a parser-level allowance only: the current semantic analyzer and
-interpreter do not resolve `print` as a pipeline function.
+Both the semantic analyzer and interpreter resolve `print` as a pipeline stage;
+the piped value is inserted as the first argument. `print` accepts one value
+followed by newline, or a value plus an explicit end/separator string.
 
 ## Control-flow productions
 
@@ -417,8 +428,12 @@ was not transferred to the caller through `outRoot`.
   normal parsing.
 - Match case patterns include identifiers and literals; array and signed pattern
   handling follows `parseMatchStmt()` in `syntax.c`.
+- `match` accepts an identifier or a parenthesized expression as its subject.
+  A case may contain literals, identifiers (including `_`), or signed numeric
+  patterns.
 - Pipeline calls accept identifier names or `print`, followed by argument
-  parentheses.
+  parentheses. The piped value is available as the pipeline stage's first
+  argument.
 - The parser does not perform semantic validation such as type compatibility,
   undeclared variable checks, or duplicate declaration checks.
 - Diagnostics depend on the lexer symbol-table format remaining stable.

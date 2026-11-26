@@ -84,7 +84,7 @@ An explicit `quit` prevents automatic state entry.
 `evalExpression()` maps parse-tree nodes to runtime `Value`s. It handles
 literals, identifiers, unary and binary expressions, ternary expressions,
 function calls, pipelines, array literals and access, and `.length` property
-access.
+access. It also handles `readLine()` and `readInt()` input expressions.
 
 Binary operator chains are evaluated from left to right. Logical `&&` and `||`
 short-circuit. Integer arithmetic remains integer arithmetic where
@@ -113,6 +113,8 @@ Built-in runtime functions include:
 - `readInt()` for an integer input, returning null when input is invalid;
 - `length()` for string or array length;
 - `replace()` for string replacement.
+- `print()` for output: one argument prints with a trailing newline; a second
+  argument is printed as the suffix with no trailing newline.
 
 Pipelines evaluate their left side once, then pass the current value as the
 first argument to each function-call stage.
@@ -132,6 +134,14 @@ through `ensure` to a binding owned by the global environment trigger
 registered `react(variable) { ... }` blocks for that name. Watchers execute
 with the global environment as their current environment. The interpreter
 limits nested watcher triggering to avoid unbounded recursion.
+
+Additional statement behavior:
+
+- `sleep(milliseconds)` pauses for the integer expression's duration.
+- `ensure` unwraps a nullable value or executes its `else` block on null.
+- `match` evaluates the subject once and executes the first matching case;
+  `_` acts as the wildcard case.
+- `quit` sets `FLOW_QUIT` and stops execution.
 
 ## Runtime diagnostics and cleanup
 

@@ -111,7 +111,9 @@ has a scope containing its loop variable.
 
 ## Built-in functions
 
-The analyzer registers these built-ins in the global scope:
+The analyzer registers these built-ins in the global scope. `print` is a
+special built-in handled by call validation rather than a normal function
+symbol:
 
 | Name | Signature | Special checks |
 | --- | --- | --- |
@@ -119,9 +121,15 @@ The analyzer registers these built-ins in the global scope:
 | `readInt` | `() -> int?` | No arguments |
 | `length` | `(any) -> int` | Requires a non-nullable string or array |
 | `replace` | `(string, string, string) -> string` | Arguments must be strings |
+| `print` | `(value[, end]) -> void` | One or two arguments; the value must be printable |
 
 Built-in symbols are available for lookup but omitted from the printed
 user-symbol table.
+
+`print` is handled specially rather than registered as a normal function symbol,
+so it can accept an optional second argument that acts as the output suffix.
+It is also accepted as a pipeline stage: the piped value becomes the first
+argument.
 
 ## Analysis behavior
 

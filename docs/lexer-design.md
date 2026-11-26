@@ -304,7 +304,7 @@ Build with the Windows helper script, then pass a `.fdls` source file:
 
 ```powershell
 .\compile.cmd
-.\fidelis.exe samples\test_features.fdls
+.\fidelis.exe samples\error\part-of-lexical-checking\test_features.fdls
 ```
 
 The demo requires an input-file argument. It writes the token table, including
