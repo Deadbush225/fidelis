@@ -78,7 +78,16 @@ static void printParseTreeRecursive(FILE *out, const ParseNode *node,
     if (depth > 0) {
         fputs(branchStack[depth] ? "├── " : "└── ", out);
     }
-    fprintf(out, "%s\n", node->label);
+
+    // Disable if you want the usual tree printing
+    if (node->childCount > 0) {
+        fprintf(out, "<%s>\n", node->label);
+    } else {
+        fprintf(out, "%s\n", node->label);
+    }
+    
+    // Enable if you want usual tree printing
+    // fprintf(out, "%s\n", node->label);
 
     for (size_t i = 0; i < node->childCount; i++) {
         branchStack[depth + 1] = (i + 1 < node->childCount);
